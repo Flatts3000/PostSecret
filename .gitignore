@@ -1,0 +1,111 @@
+# WordPress Core
+# Note: wp-content is NOT ignored since this is a theme/plugin dev repo
+/wp-admin/
+/wp-includes/
+/wp-*.php
+/xmlrpc.php
+/readme.html
+/license.txt
+
+# WordPress Config
+wp-config.php
+wp-config-local.php
+
+# Composer
+/vendor/
+composer.lock
+
+# Node.js (if used for asset building)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build artifacts
+*.map
+*.min.css
+*.min.js
+
+# Operating System
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# IDE/Editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+.phpintel/
+.phpunit.result.cache
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+error_log
+debug.log
+
+# Docker
+docker-compose.override.yml
+
+# Database
+*.sql
+*.sql.gz
+/db_data/
+
+# Uploads and cache
+wp-content/uploads/
+wp-content/cache/
+wp-content/upgrade/
+wp-content/backup-db/
+wp-content/backups/
+wp-content/blogs.dir/
+wp-content/updraft/
+wp-content/ai1wm-backups/
+
+# Plugins (keep only custom plugins)
+wp-content/plugins/akismet/
+wp-content/plugins/hello.php
+# Keep postsecret-admin plugin
+
+# Themes (keep only custom themes)
+wp-content/themes/twenty*/
+# Keep postsecret theme
+
+# WordPress Updates
+wp-content/upgrade-temp-backup/
+
+# Testing
+.phpunit.result.cache
+/tests/_output/
+/tests/_support/_generated/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Backfill/batch processing
+wp-content/quarantine/
+wp-content/backfill-logs/
+
+# Security
+*.pem
+*.key
+*.cert
+credentials.json
+secrets.json

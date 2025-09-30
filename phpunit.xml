@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<phpunit bootstrap="vendor/autoload.php"
+         colors="true"
+         stopOnFailure="false">
+    <testsuites>
+        <testsuite name="PostSecret Test Suite">
+            <directory>wp-content/plugins/postsecret-admin/tests</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

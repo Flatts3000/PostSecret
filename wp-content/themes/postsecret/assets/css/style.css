@@ -1,0 +1,17 @@
+/* Base styles for the PostSecret theme */
+body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.secret-card {
+    border: 1px solid #e1e1e1;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+}
+
+.secret-card .secret-image img {
+    width: 100%;
+    height: auto;
+}

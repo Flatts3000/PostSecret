@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<ruleset name="PostSecret">
+    <description>Code style rules for the PostSecret project.</description>
+    <rule ref="WordPress"/>
+    <file>wp-content/themes/postsecret</file>
+    <file>wp-content/plugins/postsecret-admin</file>
+</ruleset>
