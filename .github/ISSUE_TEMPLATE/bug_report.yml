@@ -1,0 +1,98 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill out the details below to help us understand and fix the issue.
+
+        **Security note**: If this is a security vulnerability, **do not** open a public issue. Report it privately via [GitHub Security Advisories](https://github.com/Flatts3000/PostSecret/security/advisories/new).
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug
+      placeholder: When I click the search button, the page shows a 500 error instead of results.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      description: What should have happened instead?
+      placeholder: I expected to see search results for my query.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Step-by-step instructions to reproduce the issue
+      placeholder: |
+        1. Go to the archive page
+        2. Enter "test" in the search box
+        3. Click "Search"
+        4. See error
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area affected
+      description: Which part of the project is affected?
+      options:
+        - Public search/archive (frontend)
+        - Admin moderation queues
+        - Taxonomy/tags management
+        - Backfill/import jobs
+        - Settings/configuration
+        - Performance
+        - Accessibility
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Your environment details
+      placeholder: |
+        - WordPress version: 6.6.1
+        - PHP version: 8.2.10
+        - MySQL version: 8.0.35
+        - Browser (if frontend): Chrome 120 / Safari 17
+        - Theme version: (if known)
+        - Plugin version: (if known)
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error logs or screenshots
+      description: |
+        Paste any relevant error logs, browser console output, or screenshots.
+        Screenshots are especially helpful for UI bugs.
+      placeholder: |
+        PHP Fatal error: Uncaught Error...
+        or attach screenshots
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I have searched existing issues to avoid duplicates
+          required: true
+        - label: This is not a security vulnerability (those should be reported privately)
+          required: true
+        - label: I have included steps to reproduce the issue
+          required: true
