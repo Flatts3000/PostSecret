@@ -80,7 +80,7 @@ Key flows: public search (text+tags), admin review & publish, and historical bac
 
 1. Create a local WordPress site (any preferred method or container).
 2. Copy `/theme/` into `wp-content/themes/postsecret` and activate **PostSecret**.
-3. Copy `/plugins/` into `wp-content/plugins/postsecret-admin` and activate **PostSecret Admin**.
+3. Copy the relevant plugin directory from `/plugins/` into `wp-content/plugins/` (see `./docs` for the correct directory name), and activate the plugin in WordPress.
 4. Run plugin/theme **migrations** (via WP-CLI command exposed by the plugin, if provided) to create custom tables and indexes.
 5. In **Settings → PostSecret**, confirm policy thresholds and defaults (NSFW/self-harm gates, confidence levels).
 
