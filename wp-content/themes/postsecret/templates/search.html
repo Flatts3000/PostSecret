@@ -1,0 +1,80 @@
+<!-- wp:template-part {"slug":"header","tagName":"header"} /-->
+
+<!-- wp:group {"tagName":"main","style":{"spacing":{"blockGap":"0","margin":{"top":"0"},"padding":{"top":"var:preset|spacing|50","bottom":"var:preset|spacing|50","left":"var:preset|spacing|50","right":"var:preset|spacing|50"}}},"layout":{"type":"constrained"}} -->
+<main class="wp-block-group" style="margin-top:0;padding-top:var(--wp--preset--spacing--50);padding-right:var(--wp--preset--spacing--50);padding-bottom:var(--wp--preset--spacing--50);padding-left:var(--wp--preset--spacing--50)">
+
+    <!-- Search Results Header -->
+    <!-- wp:group {"style":{"spacing":{"margin":{"bottom":"var:preset|spacing|50"}}},"layout":{"type":"constrained"}} -->
+    <div class="wp-block-group" style="margin-bottom:var(--wp--preset--spacing--50)">
+        <!-- wp:heading {"level":1,"style":{"typography":{"fontSize":"2rem","fontWeight":"700"}}} -->
+        <h1 class="wp-block-heading" style="font-size:2rem;font-weight:700">Search Results</h1>
+        <!-- /wp:heading -->
+
+        <!-- wp:html -->
+        <div class="ps-search-info">
+            <p>
+                <span class="ps-search-query"></span>
+                <span class="ps-search-count"></span>
+            </p>
+        </div>
+        <!-- /wp:html -->
+    </div>
+    <!-- /wp:group -->
+
+    <!-- Search Results -->
+    <!-- wp:query {"queryId":1,"query":{"perPage":12,"pages":0,"offset":0,"postType":"secret","order":"desc","orderBy":"relevance","author":"","search":"","exclude":[],"sticky":"","inherit":true},"layout":{"type":"constrained"}} -->
+    <div class="wp-block-query">
+        <!-- wp:post-template {"style":{"spacing":{"blockGap":"var:preset|spacing|40"}},"layout":{"type":"grid","columnCount":3}} -->
+            <!-- wp:group {"style":{"spacing":{"padding":{"top":"0","bottom":"0","left":"0","right":"0"}},"border":{"radius":"8px"}},"backgroundColor":"surface","className":"secret-card","layout":{"type":"constrained"}} -->
+            <div class="wp-block-group secret-card has-surface-background-color has-background" style="border-radius:8px;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0">
+                <!-- wp:post-featured-image {"aspectRatio":"4/3","style":{"border":{"radius":{"topLeft":"8px","topRight":"8px","bottomLeft":"0px","bottomRight":"0px"}}}} /-->
+
+                <!-- wp:group {"style":{"spacing":{"padding":{"top":"var:preset|spacing|30","bottom":"var:preset|spacing|30","left":"var:preset|spacing|30","right":"var:preset|spacing|30"},"blockGap":"var:preset|spacing|20"}},"layout":{"type":"constrained"}} -->
+                <div class="wp-block-group" style="padding-top:var(--wp--preset--spacing--30);padding-right:var(--wp--preset--spacing--30);padding-bottom:var(--wp--preset--spacing--30);padding-left:var(--wp--preset--spacing--30)">
+                    <!-- wp:post-title {"level":3,"isLink":true,"style":{"typography":{"fontSize":"1rem","fontWeight":"500","lineHeight":"1.4"}}} /-->
+
+                    <!-- wp:post-excerpt {"moreText":"","style":{"typography":{"fontSize":"0.875rem","lineHeight":"1.5"},"color":{"text":"var:preset|color|muted"},"spacing":{"margin":{"top":"var:preset|spacing|20"}}}} /-->
+
+                    <!-- wp:post-terms {"term":"secret_tag","style":{"elements":{"link":{"color":{"text":"var:preset|color|bg"}}},"typography":{"fontSize":"0.75rem"},"spacing":{"margin":{"top":"var:preset|spacing|20"}}},"backgroundColor":"accent","textColor":"bg"} /-->
+                </div>
+                <!-- /wp:group -->
+            </div>
+            <!-- /wp:group -->
+        <!-- /wp:post-template -->
+
+        <!-- wp:query-pagination {"paginationArrow":"arrow","layout":{"type":"flex","justifyContent":"center"}} -->
+        <!-- wp:query-pagination-previous /-->
+        <!-- wp:query-pagination-numbers /-->
+        <!-- wp:query-pagination-next /-->
+        <!-- /wp:query-pagination -->
+
+        <!-- wp:query-no-results -->
+        <!-- wp:group {"style":{"spacing":{"padding":{"top":"var:preset|spacing|50","bottom":"var:preset|spacing|50"}}},"layout":{"type":"constrained"}} -->
+        <div class="wp-block-group" style="padding-top:var(--wp--preset--spacing--50);padding-bottom:var(--wp--preset--spacing--50)">
+            <!-- wp:heading {"level":2,"style":{"typography":{"fontSize":"1.5rem"}}} -->
+            <h2 class="wp-block-heading" style="font-size:1.5rem">No secrets found</h2>
+            <!-- /wp:heading -->
+
+            <!-- wp:paragraph -->
+            <p>Sorry, no secrets match your search. Try different keywords or browse all secrets.</p>
+            <!-- /wp:paragraph -->
+
+            <!-- wp:buttons {"layout":{"type":"flex","justifyContent":"center"}} -->
+            <div class="wp-block-buttons">
+                <!-- wp:button -->
+                <div class="wp-block-button">
+                    <a class="wp-block-button__link wp-element-button" href="/?post_type=secret">Browse All Secrets</a>
+                </div>
+                <!-- /wp:button -->
+            </div>
+            <!-- /wp:buttons -->
+        </div>
+        <!-- /wp:group -->
+        <!-- /wp:query-no-results -->
+    </div>
+    <!-- /wp:query -->
+
+</main>
+<!-- /wp:group -->
+
+<!-- wp:template-part {"slug":"footer","tagName":"footer"} /-->

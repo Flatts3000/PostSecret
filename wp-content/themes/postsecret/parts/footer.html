@@ -1,0 +1,156 @@
+<!-- wp:group {"tagName":"footer","className":"ps-footer","style":{"spacing":{"padding":{"top":"28px","bottom":"28px"}}}} -->
+<footer class="wp-block-group ps-footer">
+
+    <!-- wp:html -->
+    <div class="ps-footer__rule" aria-hidden="true"></div>
+    <!-- /wp:html -->
+
+    <!-- wp:html -->
+    <div class="ps-footer__top">
+        <a class="ps-footer__brand" href="/" aria-label="PostSecret Home">
+            <img
+                    class="ps-logo ps-logo--footer"
+                    src="/wp-content/themes/postsecret/assets/postsecret-logo-light.png"
+                    data-light-src="/wp-content/themes/postsecret/assets/postsecret-logo-light.png"
+                    data-dark-src="/wp-content/themes/postsecret/assets/postsecret-logo-dark.png"
+                    alt="PostSecret"
+                    height="28"
+                    loading="lazy"
+                    decoding="async"
+            />
+        </a>
+        <p class="ps-footer__tagline">PostSecret is the largest advertisement-free blog in the world.</p>
+    </div>
+    <!-- /wp:html -->
+
+    <!-- wp:html -->
+    <a
+            class="ps-helpline"
+            href="https://findahelpline.com/i/postsecret"
+            target="_blank"
+            rel="noopener"
+            aria-label="Some secrets are too heavy to carry alone. Click for free anonymous support (opens in new tab)."
+    >
+        Some secrets are too heavy to carry alone. Click here for free anonymous support.
+    </a>
+    <!-- /wp:html -->
+
+    <!-- wp:html -->
+    <div class="ps-footer__meta">
+        <p>© <span class="ps-year"></span> PostSecret. <span class="ps-powered">Powered by WordPress.</span></p>
+        <button class="ps-theme-btn" data-ps-theme-toggle aria-pressed="false" aria-label="Toggle color mode">
+            <i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i>
+            <span class="screen-reader-text">Toggle color mode</span>
+        </button>
+    </div>
+    <!-- /wp:html -->
+
+    <!-- wp:html -->
+    <style>
+        /* Footer layout – minimal, no boxed panels */
+        .ps-footer {
+            --gap: 18px;
+            --pad: 24px;
+        }
+
+        .ps-footer__rule {
+            height: 1px;
+            background: linear-gradient(to right, transparent,
+            color-mix(in oklab, var(--wp--preset--color--border), transparent 25%),
+            transparent);
+            margin: 0 0 var(--pad) 0;
+        }
+
+        .ps-footer__top {
+            display: grid;
+            grid-template-columns:auto 1fr;
+            align-items: center;
+            gap: var(--gap);
+            margin-bottom: var(--pad);
+        }
+
+        .ps-footer__brand {
+            display: inline-flex;
+            align-items: center;
+            text-decoration: none
+        }
+
+        .ps-footer__tagline {
+            margin: 0;
+            font-size: .925rem;
+            opacity: .85
+        }
+
+        .ps-helpline {
+            display: block;
+            max-width: 880px;
+            margin: 0 auto var(--pad);
+            line-height: 0;
+            text-decoration: none
+        }
+
+        .ps-helpline img {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            background: var(--wp--preset--color--background, transparent);
+            outline: 1px solid var(--wp--preset--color--border);
+            outline-offset: 0;
+            box-shadow: 0 .5px 0 rgba(0, 0, 0, .05), 0 8px 24px rgba(0, 0, 0, .12);
+        }
+
+        html[data-theme="dark"] .ps-helpline img {
+            box-shadow: 0 .5px 0 rgba(255, 255, 255, .02), 0 8px 24px rgba(0, 0, 0, .35);
+        }
+
+        .ps-footer__meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--gap);
+            align-items: center;
+            justify-content: space-between;
+            font-size: .9rem;
+            opacity: .85
+        }
+
+        .ps-footer__meta p {
+            margin: 0
+        }
+
+        .ps-theme-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border: 1px solid color-mix(in oklab, var(--wp--preset--color--border), transparent 25%);
+            background: transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            line-height: 1
+        }
+
+        .ps-theme-btn:hover {
+            border-color: var(--wp--preset--color--border)
+        }
+
+        .ps-theme-btn:focus-visible {
+            outline: 2px solid var(--wp--preset--color--accent, #4da3ff);
+            outline-offset: 2px
+        }
+
+        @media (max-width: 640px) {
+            .ps-footer__top {
+                grid-template-columns:1fr;
+                justify-items: start;
+                gap: 10px
+            }
+
+            .ps-footer__tagline {
+                opacity: .9
+            }
+        }
+    </style>
+    <!-- /wp:html -->
+
+</footer>
+<!-- /wp:group -->

@@ -1,0 +1,20 @@
+{
+  "title": "Dark",
+  "version": 2,
+  "styles": {
+    "color": { "background": "#0b0d10", "text": "#e6edf3" },
+    "elements": { "link": { "color": { "text": "#8bd1ff" } } }
+  },
+  "settings": {
+    "color": {
+      "palette": [
+        { "slug": "bg",      "color": "#0b0d10", "name": "Background" },
+        { "slug": "surface", "color": "#12161b", "name": "Surface" },
+        { "slug": "text",    "color": "#e6edf3", "name": "Text" },
+        { "slug": "muted",   "color": "#a0acb8", "name": "Muted" },
+        { "slug": "accent",  "color": "#2fb3ff", "name": "Accent" },
+        { "slug": "border",  "color": "#232a33", "name": "Border" }
+      ]
+    }
+  }
+}

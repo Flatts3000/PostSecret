@@ -1,0 +1,13 @@
+{
+    "name": "postsecret/postsecret-admin",
+    "description": "Admin tools for managing the PostSecret archive",
+    "type": "wordpress-plugin",
+    "autoload": {
+        "psr-4": {
+            "PostSecret\\Admin\\": "src/"
+        }
+    },
+    "require": {
+        "php": ">=8.0"
+    }
+}

@@ -1,0 +1,40 @@
+{
+	"version": 3,
+	"$schema": "https://schemas.wp.org/wp/6.7/theme.json",
+	"title": "Preset 2",
+	"slug": "typography-preset-2",
+	"styles": {
+		"typography": {
+			"fontFamily": "var(--wp--preset--font-family--dm-sans)",
+			"fontWeight": "400"
+		},
+		"elements": {
+			"heading": {
+				"typography": {
+					"fontFamily": "var(--wp--preset--font-family--dm-sans)",
+					"fontWeight": "700"
+				}
+			}
+		}
+	},
+	"settings": {
+		"typography": {
+			"fontFamilies": [
+				{
+					"fontFamily": "DM Sans, sans-serif",
+					"name": "DM Sans",
+					"slug": "dm-sans",
+					"fontFace": [
+						{
+							"fontDisplay": "block",
+							"fontFamily": "DM Sans",
+							"fontStyle": "normal",
+							"fontWeight": "300 900",
+							"src": [ "file:./assets/fonts/dm-sans/DMSans-VariableFont_opsz,wght.woff2"]
+						}
+					]
+				}
+			]
+		}
+	}
+}
