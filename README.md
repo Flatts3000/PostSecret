@@ -165,7 +165,7 @@ Report vulnerabilities privately via **SECURITY.md**. Do not open public issues 
 
 ## License
 
-Open source license in **LICENSE** (per repo). Contributions are accepted under the same license.
+This project is licensed under the MIT License. Contributions are accepted under the same license. See [the MIT License](https://opensource.org/licenses/MIT) for details.
 
 ---
 
