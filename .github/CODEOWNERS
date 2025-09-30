@@ -1,0 +1,4 @@
+# Require CODEOWNERS review on touched paths
+*           @Flatts3000
+/docs/**    @Flatts3000
+/.github/** @Flatts3000
