@@ -1,0 +1,28 @@
+/* Pullquote
+--------------------------------------------- */
+
+.wp-block-pullquote blockquote {
+	margin: 0;
+}
+
+.wp-block-pullquote.alignleft,
+.wp-block-pullquote.alignright {
+	padding-bottom: var(--wp--preset--spacing--medium);
+}
+
+.wp-block-pullquote p {
+	margin-block-start: var(--wp--preset--spacing--medium);
+}
+
+.wp-block-pullquote cite {
+	display: block;
+}
+
+@media only screen and (max-width: 781px) {
+	.wp-block-pullquote.alignright,
+	.wp-block-pullquote.alignleft {
+		max-width: 100%;
+		margin-left: 0 !important;
+		margin-right: 0 !important;
+	}
+}
