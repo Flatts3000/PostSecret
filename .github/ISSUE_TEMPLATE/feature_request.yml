@@ -1,0 +1,94 @@
+name: Feature Request
+description: Propose a new feature or enhancement
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement! Please describe the feature and its value below.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: What problem does this feature solve? Who benefits?
+      placeholder: |
+        As a moderator, I need to bulk-approve items from the same trusted source to save time.
+        As a public user, I want to filter by date range to find specific periods.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you solve this problem? What should the feature do?
+      placeholder: |
+        Add a "Select all from source" button in the moderation queue, with confirmation.
+        Add date range filters to the search UI with calendar pickers.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you considered other approaches? Why is this the best option?
+      placeholder: |
+        - Manual selection: too slow for large batches
+        - Auto-approve: too risky without review
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area affected
+      description: Which part of the project would this feature affect?
+      options:
+        - Public search/archive (frontend)
+        - Admin moderation queues
+        - Taxonomy/tags management
+        - Backfill/import jobs
+        - Settings/configuration
+        - Performance
+        - Accessibility
+        - Developer experience
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this to you?
+      options:
+        - Nice to have
+        - Would improve workflow
+        - Critical for my use case
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: |
+        Screenshots, mockups, links to similar features, or other helpful context.
+      placeholder: |
+        See how SiteX handles this: [link]
+        Mockup: [attach image]
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I have searched existing issues and discussions for similar requests
+          required: true
+        - label: I have described the user problem, not just the solution
+          required: true
