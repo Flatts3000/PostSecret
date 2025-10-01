@@ -10,6 +10,7 @@ define('PSAI_SLUG', 'postsecret-ai');
 
 require __DIR__ . '/src/Prompt.php';
 require __DIR__ . '/src/SchemaGuard.php';
+require __DIR__ . '/src/Metadata.php';
 require __DIR__ . '/src/Schema.php';
 require __DIR__ . '/src/Settings.php';
 require __DIR__ . '/src/AdminPage.php';
@@ -134,6 +135,8 @@ add_action('psai_process_pair_event', function ($front_id, $back_id = 0) {
         $payload = \PSAI\SchemaGuard::normalize($payload);
 
         \PSAI\psai_store_result($front_id, $payload, $model);
+        \PSAI\Metadata::compute_and_store($front_id);
+        if ($back_id) \PSAI\Metadata::compute_and_store($back_id);
         \PSAI\psai_update_manifest($front_id, $payload);
 
         if ($back_id) {

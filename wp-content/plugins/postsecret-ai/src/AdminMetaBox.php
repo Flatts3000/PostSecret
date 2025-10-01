@@ -39,10 +39,10 @@ final class AdminMetaBox
 
         // add near the top, after $status is computed
         $proc_url = wp_nonce_url(
-            admin_url('admin-post.php?action=psai_process_now&att='.(int)$post->ID),
-            'psai_process_now_'.(int)$post->ID
+            admin_url('admin-post.php?action=psai_process_now&att=' . (int)$post->ID),
+            'psai_process_now_' . (int)$post->ID
         );
-        echo '<p><a href="'.esc_url($proc_url).'" class="button button-secondary">Process now</a></p>';
+        echo '<p><a href="' . esc_url($proc_url) . '" class="button button-secondary">Process now</a></p>';
 
         echo '<div class="psai-box">';
         echo '<p><strong>Status:</strong> <span class="psai-badge">' . esc_html($status) . '</span></p>';
@@ -56,6 +56,22 @@ final class AdminMetaBox
         echo '<p><strong>Model:</strong> ' . esc_html($model ?: '—') . '<br>';
         echo '<strong>Prompt:</strong> ' . esc_html($pver ?: '—') . '<br>';
         echo '<strong>Updated:</strong> ' . esc_html($when ?: '—') . '</p>';
+
+        $orient = get_post_meta($post->ID, '_ps_orientation', true);
+        $primary = get_post_meta($post->ID, '_ps_primary_hex', true);
+        $palette = get_post_meta($post->ID, '_ps_palette', true) ?: [];
+
+        echo '<p><strong>Orientation:</strong> ' . esc_html($orient ?: '—') . '</p>';
+        if ($primary) {
+            echo '<p><strong>Primary:</strong> <span style="display:inline-block;width:14px;height:14px;background:' . esc_attr($primary) . ';border:1px solid #ccd;"></span> ' . esc_html($primary) . '</p>';
+        }
+        if ($palette) {
+            echo '<p><strong>Palette:</strong><br>';
+            foreach ($palette as $hex) {
+                echo '<span class="psai-chip" style="background:' . esc_attr($hex) . '; color:#000; border:1px solid #ccd;">' . esc_html($hex) . '</span> ';
+            }
+            echo '</p>';
+        }
 
         if ($pair) {
             $url = get_edit_post_link((int)$pair);
