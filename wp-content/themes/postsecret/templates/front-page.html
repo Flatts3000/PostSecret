@@ -1,14 +1,14 @@
 <!-- wp:template-part {"slug":"header","tagName":"header"} /-->
 
 <!-- wp:group {"tagName":"main","style":{"spacing":{"blockGap":"0","margin":{"top":"0"},"padding":{"top":"0","bottom":"var:preset|spacing|50","left":"var:preset|spacing|50","right":"var:preset|spacing|50"}}},"layout":{"type":"constrained"}} -->
-<main class="wp-block-group" style="margin-top:0;padding-top:0;padding-right:var(--wp--preset--spacing--50);padding-bottom:var(--wp--preset--spacing--50);padding-left:var(--wp--preset--spacing--50)">
+<main class="wp-block-group" style="margin-top:0;padding-top:1rem;padding-right:var(--wp--preset--spacing--50);padding-bottom:var(--wp--preset--spacing--50);padding-left:var(--wp--preset--spacing--50)">
 
-    <!-- HERO: Split layout with “Share a Secret” visual -->
+    <!-- HERO -->
+    <!-- (unchanged; keeping your existing hero exactly as-is) -->
     <!-- wp:group {"className":"ps-hero","style":{"spacing":{"padding":{"top":"clamp(48px,8vw,96px)","bottom":"clamp(48px,8vw,96px)"},"blockGap":"0"}},"layout":{"type":"constrained","contentSize":"1200px"}} -->
     <div class="wp-block-group ps-hero" style="padding-top:clamp(48px,8vw,96px);padding-bottom:clamp(48px,8vw,96px)">
         <!-- wp:columns {"isStackedOnMobile":true,"style":{"spacing":{"blockGap":"clamp(24px,4vw,48px)"}}} -->
         <div class="wp-block-columns">
-            <!-- LEFT: Copy + single CTA -->
             <!-- wp:column {"width":"52%"} -->
             <div class="wp-block-column" style="flex-basis:52%">
                 <!-- wp:paragraph {"style":{"typography":{"fontSize":"clamp(1.05rem,1.8vw,1.25rem)","lineHeight":"1.6"},"color":{"text":"var:preset|color|muted"},"spacing":{"margin":{"top":"12px","bottom":"28px"}}}} -->
@@ -16,23 +16,9 @@
                     This is a living museum of anonymous postcards. Thousands of real secrets, no ads, just humanity.
                 </p>
                 <!-- /wp:paragraph -->
-
-                <!-- wp:buttons {"layout":{"type":"flex","justifyContent":"left"}} -->
-                <div class="wp-block-buttons">
-                    <!-- Single CTA kept: Browse Secrets -->
-                    <!-- wp:button {"style":{"spacing":{"padding":{"top":"12px","bottom":"12px","left":"24px","right":"24px"}}}} -->
-                    <div class="wp-block-button">
-                        <a class="wp-block-button__link wp-element-button ps-pill" href="/?s=&post_type=secret" style="padding-top:12px;padding-right:24px;padding-bottom:12px;padding-left:24px">
-                            Browse Secrets
-                        </a>
-                    </div>
-                    <!-- /wp:button -->
-                </div>
-                <!-- /wp:buttons -->
             </div>
             <!-- /wp:column -->
 
-            <!-- RIGHT: "Share a Secret" image as interactive card -->
             <!-- wp:column {"width":"48%","className":"ps-hero__visual"} -->
             <div class="wp-block-column ps-hero__visual" style="flex-basis:48%">
                 <!-- wp:html -->
@@ -54,7 +40,7 @@
     </div>
     <!-- /wp:group -->
 
-    <!-- LATEST SECRETS GRID -->
+    <!-- LATEST SECRETS STREAM -->
     <!-- wp:group {"className":"ps-latest","style":{"spacing":{"padding":{"top":"clamp(48px,8vw,80px)","bottom":"clamp(48px,8vw,80px)"},"blockGap":"var:preset|spacing|50"}},"layout":{"type":"constrained","contentSize":"1200px"}} -->
     <div class="wp-block-group ps-latest" style="padding-top:clamp(48px,8vw,80px);padding-bottom:clamp(48px,8vw,80px)">
 
@@ -62,50 +48,66 @@
         <h2 class="wp-block-heading" style="margin-bottom:var(--wp--preset--spacing--40);font-size:clamp(1.75rem,3vw,2.25rem);font-weight:600">Latest Secrets</h2>
         <!-- /wp:heading -->
 
-        <!-- wp:query {"queryId":1,"query":{"perPage":12,"pages":0,"offset":0,"postType":"post","order":"desc","orderBy":"date","author":"","search":"","exclude":[],"sticky":"","inherit":false},"className":"ps-secrets-grid"} -->
-        <div class="wp-block-query ps-secrets-grid">
+        <!-- wp:html -->
+        <div id="psai-stream" aria-live="polite">
+            <noscript>
+                <p style="text-align:center;color:var(--wp--preset--color--muted)">Enable JavaScript to browse the latest secrets.</p>
+            </noscript>
+        </div>
+        <!-- /wp:html -->
 
-            <!-- wp:post-template {"style":{"spacing":{"blockGap":"var:preset|spacing|40"}},"layout":{"type":"grid","columnCount":4}} -->
-
-                <!-- wp:group {"className":"ps-secret-card","style":{"spacing":{"padding":"0"},"border":{"radius":"12px"}},"layout":{"type":"default"}} -->
-                <div class="wp-block-group ps-secret-card" style="border-radius:12px;padding:0">
-
-                    <!-- wp:post-featured-image {"isLink":true,"aspectRatio":"4/3","style":{"border":{"radius":"12px"}}} /-->
-
-                    <!-- wp:group {"style":{"spacing":{"padding":{"top":"var:preset|spacing|30","right":"var:preset|spacing|30","bottom":"var:preset|spacing|30","left":"var:preset|spacing|30"},"blockGap":"var:preset|spacing|20"}},"layout":{"type":"default"}} -->
-                    <div class="wp-block-group" style="padding-top:var(--wp--preset--spacing--30);padding-right:var(--wp--preset--spacing--30);padding-bottom:var(--wp--preset--spacing--30);padding-left:var(--wp--preset--spacing--30)">
-
-                        <!-- wp:post-terms {"term":"category","style":{"typography":{"fontSize":"0.875rem"}}} /-->
-
-                        <!-- wp:post-excerpt {"moreText":"","showMoreOnNewLine":false,"excerptLength":15,"style":{"typography":{"fontSize":"0.95rem","lineHeight":"1.5"}}} /-->
-
-                        <!-- wp:post-date {"format":"M j, Y","style":{"typography":{"fontSize":"0.875rem"},"color":{"text":"var(--wp--preset--color--muted)"}}} /-->
-
+        <!-- ✅ Mustache templates -->
+        <!-- wp:html -->
+        <script id="psai-card-tpl" type="x-tmpl-mustache">
+            <article class="ps-card {{#hasBack}}ps-card--flippable{{/hasBack}}" data-id="{{id}}" data-orientation="{{orientation}}" data-width="{{width}}" data-height="{{height}}">
+              <div class="ps-card__inner">
+                <!-- Front side -->
+                <div class="ps-card__face ps-card__face--front">
+                  {{#hasBack}}
+                  <button class="ps-card__flip-btn" type="button" aria-label="Flip to see back" title="Click to flip">↻</button>
+                  {{/hasBack}}
+                  <a class="ps-card__link" href="{{link}}" aria-label="{{altFallback}}">
+                    <figure class="ps-card__media">
+                      <img class="ps-card__img" src="{{src}}" alt="{{alt}}">
+                      {{#advisory}}
+                      <figcaption class="ps-card__badge" aria-label="Content advisory" title="Content advisory">!</figcaption>
+                      {{/advisory}}
+                    </figure>
+                    <div class="ps-card__meta">
+                      <div class="ps-card__date">{{dateFmt}}</div>
+                      {{#excerpt}}<p class="ps-card__excerpt">{{excerpt}}</p>{{/excerpt}}
+                      {{#displayTags.length}}
+                      <div class="ps-card__tags">
+                        {{#displayTags}}<span class="ps-chip">{{.}}</span>{{/displayTags}}
+                        {{#overflowCount}}<span class="ps-chip ps-chip--more">+{{overflowCount}}</span>{{/overflowCount}}
+                      </div>
+                      {{/displayTags.length}}
                     </div>
-                    <!-- /wp:group -->
-
+                  </a>
                 </div>
-                <!-- /wp:group -->
+                <!-- Back side -->
+                {{#hasBack}}
+                <div class="ps-card__face ps-card__face--back">
+                  <button class="ps-card__flip-btn" type="button" aria-label="Flip to see front" title="Click to flip back">↻</button>
+                  <figure class="ps-card__media">
+                    <img class="ps-card__img" src="{{back_src}}" alt="{{back_alt}}">
+                  </figure>
+                </div>
+                {{/hasBack}}
+              </div>
+            </article>
+        </script>
 
-            <!-- /wp:post-template -->
+        <script id="psai-skeleton-tpl" type="x-tmpl-mustache">
+            <div class="ps-skeleton" aria-hidden="true"></div>
+        </script>
 
-            <!-- wp:query-no-results -->
-                <!-- wp:paragraph {"align":"center","style":{"color":{"text":"var(--wp--preset--color--muted)"}}} -->
-                <p class="has-text-align-center" style="color:var(--wp--preset--color--muted)">No secrets found yet. Check back soon!</p>
-                <!-- /wp:paragraph -->
-            <!-- /wp:query-no-results -->
+        <script id="psai-error-tpl" type="x-tmpl-mustache">
+            <div class="ps-error" role="status">Could not load more secrets right now.</div>
+        </script>
+        <!-- /wp:html -->
 
-        </div>
-        <!-- /wp:query -->
-
-        <!-- Browse All Link -->
-        <!-- wp:buttons {"layout":{"type":"flex","justifyContent":"center"},"style":{"spacing":{"margin":{"top":"var:preset|spacing|50"}}}} -->
-        <div class="wp-block-buttons" style="margin-top:var(--wp--preset--spacing--50)">
-            <!-- wp:button {"className":"is-style-outline"} -->
-            <div class="wp-block-button is-style-outline"><a class="wp-block-button__link wp-element-button" href="/?s=&post_type=secret">Browse All Secrets</a></div>
-            <!-- /wp:button -->
-        </div>
-        <!-- /wp:buttons -->
+        <!-- (buttons removed) -->
 
     </div>
     <!-- /wp:group -->

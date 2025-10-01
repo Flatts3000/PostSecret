@@ -3,6 +3,22 @@ declare(strict_types=1);
 
 // Enqueue scripts and styles
 add_action('wp_enqueue_scripts', function () {
+    wp_enqueue_style(
+        'ps-stream',
+        get_stylesheet_directory_uri() . '/assets/css/ps-stream.css',
+        [],
+        filemtime(get_stylesheet_directory() . '/assets/css/ps-stream.css')
+    );
+
+    // Mustache (templating) — keep it global so any template can use it
+    wp_enqueue_script(
+        'mustache',
+        'https://unpkg.com/mustache@4.2.0/mustache.min.js',
+        [],
+        null,
+        true
+    );
+
     // Theme toggle script
     wp_enqueue_script(
         'ps-mode-toggle',
@@ -86,6 +102,6 @@ add_action('wp_enqueue_scripts', function () {
 });
 
 // Make our child theme the default fallback (prevents "twentytwentyfive" errors)
-if ( ! defined('WP_DEFAULT_THEME') ) {
+if (!defined('WP_DEFAULT_THEME')) {
     define('WP_DEFAULT_THEME', 'ollie-child');
 }
