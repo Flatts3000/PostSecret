@@ -10,6 +10,7 @@ define('PSAI_SLUG', 'postsecret-ai');
 
 
 require __DIR__ . '/src/Prompt.php';
+require __DIR__ . '/src/SchemaGuard.php';
 require __DIR__ . '/src/Schema.php';
 require __DIR__ . '/src/Settings.php';
 require __DIR__ . '/src/AdminPage.php';
