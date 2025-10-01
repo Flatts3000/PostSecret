@@ -2,6 +2,8 @@
 
 Fast, accessible browsing of the entire PostSecret collection, built on WordPress and MySQL. Public users get full-text search and tag filters; moderators get review queues, publishing controls, taxonomy tools, and an audit trail—privacy and safety first.
 
+**[📋 View Project Kanban Board](https://tree.taiga.io/project/flatts-postsecret/kanban)**
+
 ---
 
 ## Why this exists
