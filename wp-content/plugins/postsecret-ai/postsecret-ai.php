@@ -11,6 +11,7 @@ define('PSAI_SLUG', 'postsecret-ai');
 require __DIR__ . '/src/Prompt.php';
 require __DIR__ . '/src/SchemaGuard.php';
 require __DIR__ . '/src/Metadata.php';
+require __DIR__ . '/src/AttachmentSync.php';
 require __DIR__ . '/src/Schema.php';
 require __DIR__ . '/src/Settings.php';
 require __DIR__ . '/src/AdminPage.php';
@@ -127,7 +128,7 @@ add_action('psai_process_pair_event', function ($front_id, $back_id = 0) {
     if (get_post_meta($front_id, '_ps_duplicate_of', true)) return;
 
     try {
-        // ✅ Build data URLs (works on localhost/private sites)
+        // Build data URLs (works on localhost/private sites)
         $frontSrc = \PSAI\psai_make_data_url($front_id);
         $backSrc = $back_id ? \PSAI\psai_make_data_url($back_id) : null;
 
@@ -135,6 +136,10 @@ add_action('psai_process_pair_event', function ($front_id, $back_id = 0) {
         $payload = \PSAI\SchemaGuard::normalize($payload);
 
         \PSAI\psai_store_result($front_id, $payload, $model);
+
+        // ✅ Sync AI → attachment fields (Alt / Caption / Description)
+        \PSAI\AttachmentSync::sync_from_payload($front_id, $payload, $back_id);
+
         \PSAI\Metadata::compute_and_store($front_id);
         if ($back_id) \PSAI\Metadata::compute_and_store($back_id);
         \PSAI\psai_update_manifest($front_id, $payload);
