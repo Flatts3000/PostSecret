@@ -1,0 +1,213 @@
+/**
+ * Semantic Search Styles
+ */
+
+/* Search Form in Header */
+.ps-semantic-search {
+    position: relative;
+}
+
+.ps-search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.ps-search-input {
+    padding: 0.5rem 2.5rem 0.5rem 1rem;
+    border: 1px solid var(--wp--preset--color--contrast-2, #ddd);
+    border-radius: 24px;
+    font-size: 0.95rem;
+    width: 240px;
+    transition: all 0.2s ease;
+}
+
+.ps-search-input:focus {
+    outline: none;
+    border-color: var(--wp--preset--color--primary, #333);
+    width: 280px;
+}
+
+.ps-search-button {
+    position: absolute;
+    right: 0.25rem;
+    background: transparent;
+    border: none;
+    padding: 0.5rem;
+    cursor: pointer;
+    color: var(--wp--preset--color--contrast, #333);
+    transition: color 0.2s ease;
+}
+
+.ps-search-button:hover {
+    color: var(--wp--preset--color--primary, #000);
+}
+
+.ps-search-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ps-search-error {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 0.25rem;
+    padding: 0.5rem;
+    background: #fee;
+    color: #c33;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    display: none;
+    white-space: nowrap;
+    z-index: 10;
+}
+
+/* Search Results Page */
+.ps-search-header {
+    margin-bottom: 2rem;
+    text-align: center;
+    padding: 2rem 1rem;
+}
+
+.ps-search-header h1 {
+    font-size: clamp(1.75rem, 3vw, 2.25rem);
+    margin-bottom: 0.5rem;
+}
+
+.ps-search-count {
+    color: var(--wp--preset--color--contrast-2, #666);
+    font-size: 1rem;
+}
+
+.ps-search-loading {
+    color: var(--wp--preset--color--contrast-2, #666);
+    font-size: 1.1rem;
+    margin-top: 1rem;
+}
+
+.ps-search-loading i {
+    margin-right: 0.5rem;
+}
+
+.ps-search-error-msg {
+    color: #c33;
+    font-size: 1.1rem;
+    margin: 1rem 0;
+}
+
+.ps-button {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    background: var(--wp--preset--color--primary, #333);
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    margin-top: 1rem;
+    transition: background 0.2s ease;
+}
+
+.ps-button:hover {
+    background: var(--wp--preset--color--primary-dark, #000);
+}
+
+.ps-no-results {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 3rem 1rem;
+}
+
+.ps-no-results p {
+    font-size: 1.25rem;
+    color: var(--wp--preset--color--contrast-2, #666);
+    margin-bottom: 0.5rem;
+}
+
+.ps-search-hint {
+    font-size: 1rem !important;
+    color: var(--wp--preset--color--contrast-3, #999) !important;
+}
+
+/* Search Results - Single Column Layout for Reading */
+#ps-search-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    margin-top: 2rem;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+#ps-search-grid .ps-card {
+    width: 100%;
+    max-width: none;
+}
+
+#ps-search-grid .ps-card__img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+}
+
+/* Loading indicator for infinite scroll */
+.ps-search-loading-more {
+    text-align: center;
+    padding: 2rem;
+    color: var(--wp--preset--color--contrast-2, #666);
+}
+
+.ps-search-loading-more i {
+    margin-right: 0.5rem;
+}
+
+/* Similarity score badge */
+.ps-card__similarity {
+    display: inline-block;
+    margin-top: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    background: var(--wp--preset--color--contrast-2, #eee);
+    color: var(--wp--preset--color--contrast, #333);
+    font-size: 0.75rem;
+    border-radius: 3px;
+    font-weight: 500;
+}
+
+/* Sentinel element for intersection observer */
+.ps-search-sentinel {
+    visibility: hidden;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .ps-search-input {
+        width: 180px;
+    }
+
+    .ps-search-input:focus {
+        width: 200px;
+    }
+
+    #ps-search-grid {
+        gap: 1.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .ps-search-wrapper {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .ps-search-input {
+        width: 100%;
+    }
+
+    .ps-search-input:focus {
+        width: 100%;
+    }
+
+    #ps-search-grid {
+        gap: 1rem;
+    }
+}

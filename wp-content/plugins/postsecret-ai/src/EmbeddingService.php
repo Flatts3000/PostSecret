@@ -1,367 +1,527 @@
 <?php
+declare(strict_types=1);
 
 namespace PSAI;
 
 if (!defined('ABSPATH')) exit;
 
-/**
- * Handles text embedding generation and storage for semantic search.
- *
- * Embeddings are generated from:
- * - Secret description
- * - Topics, feelings, meanings (facets)
- * - Extracted text from front/back
- *
- * Stored in ps_text_embeddings table for efficient retrieval.
- */
 final class EmbeddingService
 {
+    /** @var array<string,int> Map models → vector dimensions (update as needed). */
+    private const MODEL_DIMS = [
+        'text-embedding-3-small' => 1536,
+        'text-embedding-3-large' => 3072,
+    ];
+
+    /** HTTP defaults for remote calls (overridden by settings where present). */
+    private const HTTP_TIMEOUT_EMBEDDING_DEFAULT = 30; // s
+    private const HTTP_TIMEOUT_QDRANT_DEFAULT = 10; // s
+    private const HTTP_USER_AGENT = 'PostSecret-EmbeddingService/1.0 (+WordPress)';
+
+    /** Env/const fallbacks for Qdrant (legacy). */
+    private const OPT_QDRANT_URL = 'PS_QDRANT_URL';
+    private const OPT_QDRANT_API_KEY = 'PS_QDRANT_API_KEY';
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Public API
+    // ─────────────────────────────────────────────────────────────────────────────
+
     /**
-     * Generate and store embedding for a Secret.
-     *
-     * @param int   $secret_id  Attachment ID
-     * @param array $payload    Normalized classification payload
-     * @param string $api_key   OpenAI API key
-     * @param string $model     Embedding model (default: text-embedding-3-small)
-     * @return bool Success
+     * Generate, store, and index embedding (canonical in MySQL, best-effort mirror to Qdrant).
      */
     public static function generate_and_store(int $secret_id, array $payload, string $api_key, string $model = 'text-embedding-3-small'): bool
     {
         try {
-            // Construct embedding input from facets and text
+            // Allow last-mile overrides (e.g., staged rollouts).
+            /** @var string $model */
+            $model = apply_filters('psai/embedding/model', $model, $secret_id, $payload);
+
+            // If API key wasn't supplied, use settings.
+            if ($api_key === '') {
+                $api_key = (string)self::opt('API_KEY', '');
+            }
+
             $input = self::build_embedding_input($payload);
-
-            if (empty($input)) {
+            if ($input === '') {
+                error_log("[EmbeddingService] Empty embedding input for secret {$secret_id}; skipping.");
                 return false;
             }
 
-            // Generate embedding via OpenAI API
             $embedding = self::generate_embedding($api_key, $model, $input);
-
-            if (!$embedding) {
+            if ($embedding === null) {
                 return false;
             }
 
-            // Normalize to unit vector
             $embedding = self::normalize_vector($embedding);
 
-            // Store in database
-            return self::store_embedding($secret_id, $model, $embedding);
+            // Canonical: store in MySQL
+            $ok = self::store_embedding($secret_id, $model, $embedding, $payload);
+            if (!$ok) {
+                return false;
+            }
+
+            // Mirror to Qdrant (fast ANN), best-effort and non-blocking, only if enabled
+            if (self::qdrant_enabled()) {
+                $qdrantPayload = [
+                    'status' => 'public', // adjust at query time if needed
+                    'teachesWisdom' => !empty($payload['teachesWisdom']),
+                    'topics' => $payload['topics'] ?? [],
+                    'feelings' => $payload['feelings'] ?? [],
+                    'meanings' => $payload['meanings'] ?? [],
+                ];
+                /** @var array $qdrantPayload */
+                $qdrantPayload = apply_filters('psai/embedding/qdrant-payload', $qdrantPayload, $secret_id, $payload);
+
+                self::qdrant_upsert($secret_id, $model, $embedding, $qdrantPayload);
+            }
+
+            do_action('psai/embedding/saved', $secret_id, $model, $embedding, $payload);
+            return true;
 
         } catch (\Throwable $e) {
-            error_log('EmbeddingService error for secret ' . $secret_id . ': ' . $e->getMessage());
+            error_log('[EmbeddingService] Error for secret ' . $secret_id . ': ' . $e->getMessage());
+            do_action('psai/embedding/error', $secret_id, $e);
             return false;
         }
     }
 
     /**
-     * Build embedding input string from classification payload.
-     *
-     * Format: "Secret: [description]. Topics: [t1, t2]. Feelings: [f1]. Meanings: [m1]. Text: [fullText]"
-     *
-     * @param array $payload Classification payload
-     * @return string Input text for embedding
+     * Similarity search via QdrantSearchService when present; fallback to MySQL brute force.
+     * If the caller used defaults, pull tuned values from settings.
      */
-    private static function build_embedding_input(array $payload): string
+    public static function find_similar(int $secret_id, int $limit = 10, float $min_score = 0.5, array $filters = []): array
     {
-        $parts = [];
-
-        // Secret description
-        if (!empty($payload['secretDescription'])) {
-            $parts[] = 'Secret: ' . $payload['secretDescription'];
+        // If the method was called with library defaults, adopt the configured values.
+        if ($limit === 10) {
+            $limit = (int)self::opt('ANN_TOP_K', 24);
+        }
+        if (abs($min_score - 0.5) < 1e-9) {
+            $min_score = (float)self::opt('ANN_MIN_SCORE', 0.55);
         }
 
-        // Topics
-        if (!empty($payload['topics'])) {
-            $parts[] = 'Topics: ' . implode(', ', $payload['topics']);
-        }
-
-        // Feelings
-        if (!empty($payload['feelings'])) {
-            $parts[] = 'Feelings: ' . implode(', ', $payload['feelings']);
-        }
-
-        // Meanings
-        if (!empty($payload['meanings'])) {
-            $parts[] = 'Meanings: ' . implode(', ', $payload['meanings']);
-        }
-
-        // Extracted text (front + back, truncated to ~2000 chars total)
-        $texts = [];
-        if (!empty($payload['front']['text']['fullText'])) {
-            $texts[] = $payload['front']['text']['fullText'];
-        }
-        if (!empty($payload['back']['text']['fullText'])) {
-            $texts[] = $payload['back']['text']['fullText'];
-        }
-        if (!empty($texts)) {
-            $combined = implode(' ', $texts);
-            // Truncate if too long (embeddings work best with ~8k tokens max, ~2k chars is safe)
-            if (mb_strlen($combined, 'UTF-8') > 2000) {
-                $combined = mb_substr($combined, 0, 2000, 'UTF-8') . '…';
+        if (class_exists('PSSearch\\QdrantSearchService')) {
+            $results = \PSSearch\QdrantSearchService::find_similar($secret_id, $limit, $min_score, $filters);
+            if ($results !== null) {
+                return $results;
             }
-            $parts[] = 'Text: ' . $combined;
+            return \PSSearch\QdrantSearchService::find_similar_mysql($secret_id, $limit, $min_score);
         }
 
-        return implode('. ', $parts);
+        return self::find_similar_mysql($secret_id, $limit, $min_score);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // OpenAI
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    private static function openai_embeddings_url(): string
+    {
+        $base = (string)self::opt('API_BASE', '');
+        $base = trim($base);
+        if ($base === '') {
+            $base = 'https://api.openai.com/v1';
+        }
+        return rtrim($base, '/') . '/embeddings';
+    }
+
+    private static function embedding_timeout_seconds(): int
+    {
+        // Reuse HTTP timeout if provided, else internal default.
+        return (int)self::opt('REQUEST_TIMEOUT_SECONDS', self::HTTP_TIMEOUT_EMBEDDING_DEFAULT);
     }
 
     /**
-     * Generate embedding via OpenAI API.
-     *
-     * @param string $api_key  OpenAI API key
-     * @param string $model    Embedding model
-     * @param string $input    Input text
-     * @return array|null Embedding vector or null on failure
+     * Call OpenAI Embeddings API.
      */
     private static function generate_embedding(string $api_key, string $model, string $input): ?array
     {
-        $endpoint = 'https://api.openai.com/v1/embeddings';
+        $body = ['model' => $model, 'input' => $input];
 
-        $body = [
-            'model' => $model,
-            'input' => $input,
-        ];
-
-        $res = wp_remote_post($endpoint, [
+        $args = [
             'headers' => [
                 'Authorization' => 'Bearer ' . $api_key,
                 'Content-Type' => 'application/json',
+                'User-Agent' => self::HTTP_USER_AGENT,
             ],
-            'timeout' => 30,
-            'body' => wp_json_encode($body),
-        ]);
+            'timeout' => self::embedding_timeout_seconds(),
+            'body' => wp_json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        ];
+
+        $res = wp_remote_post(self::openai_embeddings_url(), $args);
 
         if (is_wp_error($res)) {
-            error_log('Embedding API error: ' . $res->get_error_message());
+            error_log('[EmbeddingService] Embedding API error: ' . $res->get_error_message());
             return null;
         }
 
-        $code = wp_remote_retrieve_response_code($res);
-        $raw = wp_remote_retrieve_body($res);
+        $code = (int)wp_remote_retrieve_response_code($res);
+        $raw = (string)wp_remote_retrieve_body($res);
 
         if ($code >= 300) {
-            error_log('Embedding API HTTP ' . $code . ': ' . substr($raw, 0, 500));
+            error_log('[EmbeddingService] Embedding API HTTP ' . $code . ': ' . substr($raw, 0, 600));
             return null;
         }
 
         $json = json_decode($raw, true);
         $embedding = $json['data'][0]['embedding'] ?? null;
 
-        if (!is_array($embedding) || empty($embedding)) {
-            error_log('Invalid embedding response: ' . substr($raw, 0, 200));
+        if (!is_array($embedding) || $embedding === []) {
+            error_log('[EmbeddingService] Invalid embedding response: ' . substr($raw, 0, 300));
             return null;
         }
 
-        return $embedding;
-    }
-
-    /**
-     * Normalize vector to unit length (L2 normalization).
-     *
-     * @param array $vector Input vector
-     * @return array Normalized vector
-     */
-    private static function normalize_vector(array $vector): array
-    {
-        $magnitude = sqrt(array_sum(array_map(fn($x) => $x * $x, $vector)));
-
-        if ($magnitude == 0) {
-            return $vector;
+        $expected = self::MODEL_DIMS[$model] ?? null;
+        if (is_int($expected) && count($embedding) !== $expected) {
+            error_log(sprintf(
+                '[EmbeddingService] Model "%s" expected dim %d but received %d.',
+                $model, $expected, count($embedding)
+            ));
         }
 
-        return array_map(fn($x) => $x / $magnitude, $vector);
+        /** @var array<int,float> $embedding */
+        return array_map(static fn($v) => (float)$v, $embedding);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Qdrant Integration (Upsert)
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    private static function qdrant_enabled(): bool
+    {
+        return (bool)self::opt('QDRANT_ENABLE', true);
+    }
+
+    /** Resolve Qdrant base URL: settings first, then env/const fallback. */
+    private static function qdrant_url(): ?string
+    {
+        $url = (string)self::opt('QDRANT_URL', '');
+        if ($url === '') {
+            $url = getenv(self::OPT_QDRANT_URL) ?: (defined(self::OPT_QDRANT_URL) ? constant(self::OPT_QDRANT_URL) : '');
+        }
+        return is_string($url) && $url !== '' ? rtrim($url, '/') : null;
+    }
+
+    /** Optional Qdrant API key. */
+    private static function qdrant_api_key(): ?string
+    {
+        $key = (string)self::opt('QDRANT_API_KEY', '');
+        if ($key === '') {
+            $key = getenv(self::OPT_QDRANT_API_KEY) ?: (defined(self::OPT_QDRANT_API_KEY) ? constant(self::OPT_QDRANT_API_KEY) : '');
+        }
+        return is_string($key) && $key !== '' ? $key : null;
+    }
+
+    /** Collection name: prefer setting; else per-model safe name. */
+    private static function qdrant_collection(string $model): string
+    {
+        $configured = (string)self::opt('QDRANT_COLLECTION', '');
+        if ($configured !== '') {
+            return $configured;
+        }
+        $name = 'secrets_' . preg_replace('/[^a-z0-9]+/i', '_', $model);
+        /** @var string $name */
+        $name = apply_filters('psai/embedding/qdrant-collection', $name, $model);
+        return $name;
+    }
+
+    /** Distance metric from settings (Cosine/Dot/Euclid). */
+    private static function qdrant_distance(): string
+    {
+        $d = (string)self::opt('QDRANT_DISTANCE', 'Cosine');
+        return in_array($d, ['Cosine', 'Dot', 'Euclid'], true) ? $d : 'Cosine';
+    }
+
+    /** Per-request Qdrant timeout. */
+    private static function qdrant_timeout_seconds(): int
+    {
+        return (int)self::opt('ANN_TIMEOUT_SECONDS', self::HTTP_TIMEOUT_QDRANT_DEFAULT);
+    }
+
+    /** Ensure vector dim: prefer setting, else from actual vector length. */
+    private static function qdrant_vector_size(int $fallback): int
+    {
+        $sz = (int)self::opt('QDRANT_VECTOR_SIZE', 0);
+        return $sz > 0 ? $sz : $fallback;
     }
 
     /**
-     * Store embedding in database.
-     *
-     * @param int    $secret_id    Attachment ID
-     * @param string $model        Model version
-     * @param array  $embedding    Embedding vector
-     * @return bool Success
+     * Upsert a single point into Qdrant (best-effort).
      */
-    private static function store_embedding(int $secret_id, string $model, array $embedding): bool
+    private static function qdrant_upsert(int $secret_id, string $model, array $vector, array $payload = []): void
     {
-        global $wpdb;
+        $base = self::qdrant_url();
+        if ($base === null) return;
 
-        $table_name = $wpdb->prefix . 'ps_text_embeddings';
-        $dimension = count($embedding);
+        // Ensure collection exists (cached)
+        $collection = self::qdrant_collection($model);
+        self::qdrant_ensure_collection($collection, self::qdrant_vector_size(count($vector)));
 
-        // Convert to JSON for storage
-        $embedding_json = wp_json_encode($embedding);
+        $body = [
+            'points' => [[
+                'id' => $secret_id,
+                'vector' => array_values($vector),
+                'payload' => array_merge($payload, [
+                    'secret_id' => $secret_id,
+                    'model_version' => $model,
+                ]),
+            ]],
+        ];
 
-        $result = $wpdb->replace(
-            $table_name,
-            [
-                'secret_id' => $secret_id,
-                'model_version' => $model,
-                'embedding' => $embedding_json,
-                'dimension' => $dimension,
-                'updated_at' => current_time('mysql'),
-            ],
-            ['%d', '%s', '%s', '%d', '%s']
-        );
-
-        return $result !== false;
+        self::qdrant_request('PUT', "/collections/{$collection}/points?wait=true", $body, self::qdrant_timeout_seconds());
     }
 
     /**
-     * Get embedding for a Secret.
-     *
-     * @param int $secret_id Attachment ID
-     * @return array|null Embedding data or null if not found
+     * Ensure Qdrant collection exists; create if missing (uses settings for size/distance).
      */
-    public static function get_embedding(int $secret_id): ?array
+    private static function qdrant_ensure_collection(string $collection, int $dim): void
     {
-        global $wpdb;
+        $cache_key = "psai_qdrant_has_{$collection}";
+        if (get_transient($cache_key)) return;
 
-        $table_name = $wpdb->prefix . 'ps_text_embeddings';
+        $exists = self::qdrant_request('GET', "/collections/{$collection}", null, 5);
+        $ok = is_array($exists) && (($exists['status'] ?? '') === 'ok');
 
-        $row = $wpdb->get_row(
-            $wpdb->prepare(
-                "SELECT * FROM $table_name WHERE secret_id = %d",
-                $secret_id
-            ),
-            ARRAY_A
-        );
+        if (!$ok) {
+            $create = [
+                'vectors' => [
+                    'size' => $dim,
+                    'distance' => self::qdrant_distance(),
+                ],
+                'hnsw_config' => [
+                    'm' => 16,
+                    'ef_construct' => 200,
+                ],
+                'optimizers_config' => [
+                    'default_segment_number' => 2,
+                    'indexing_threshold' => 0,  // index immediately (dev-friendly)
+                ],
+            ];
+            self::qdrant_request('PUT', "/collections/{$collection}", $create, 20);
+        }
 
-        if (!$row) {
+        set_transient($cache_key, 1, HOUR_IN_SECONDS);
+    }
+
+    /**
+     * Minimal Qdrant HTTP client wrapper with optional API key header.
+     */
+    private static function qdrant_request(string $method, string $path, ?array $body = null, int $timeout = null): ?array
+    {
+        $base = self::qdrant_url();
+        if ($base === null) return null;
+
+        $headers = [
+            'Content-Type' => 'application/json',
+            'User-Agent' => self::HTTP_USER_AGENT,
+        ];
+
+        $apiKey = self::qdrant_api_key();
+        if ($apiKey !== null) {
+            $headers['api-key'] = $apiKey; // Qdrant standard header
+        }
+
+        $args = [
+            'method' => $method,
+            'headers' => $headers,
+            'timeout' => $timeout ?? self::qdrant_timeout_seconds(),
+        ];
+
+        if ($body !== null) {
+            $args['body'] = wp_json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+
+        $url = $base . $path;
+        $res = wp_remote_request($url, $args);
+
+        if (is_wp_error($res)) {
+            error_log('[EmbeddingService] Qdrant HTTP error: ' . $res->get_error_message());
             return null;
         }
 
-        // Decode embedding JSON
-        $row['embedding'] = json_decode($row['embedding'], true);
+        $code = (int)wp_remote_retrieve_response_code($res);
+        $raw = (string)wp_remote_retrieve_body($res);
 
-        return $row;
+        if ($code >= 300) {
+            error_log("[EmbeddingService] Qdrant HTTP {$code}: " . substr($raw, 0, 300));
+            return null;
+        }
+
+        $json = json_decode($raw, true);
+        return is_array($json) ? $json : null;
     }
 
-    /**
-     * Find similar Secrets using cosine similarity.
-     *
-     * @param int $secret_id     Source Secret ID
-     * @param int $limit         Number of results
-     * @param float $min_similarity Minimum similarity threshold (0.0-1.0)
-     * @return array Array of [secret_id, similarity] sorted by similarity desc
-     */
-    public static function find_similar(int $secret_id, int $limit = 10, float $min_similarity = 0.5): array
+    // ─────────────────────────────────────────────────────────────────────────────
+    // MySQL brute-force fallback
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    private static function find_similar_mysql(int $secret_id, int $limit, float $min_similarity): array
     {
         global $wpdb;
 
         $source = self::get_embedding($secret_id);
-        if (!$source) {
-            return [];
-        }
+        if (!$source) return [];
 
-        $table_name = $wpdb->prefix . 'ps_text_embeddings';
+        $table = $wpdb->prefix . 'ps_text_embeddings';
+        $model = (string)$source['model_version'];
 
-        // Get all embeddings (except source)
-        // For large datasets, you'd want to use a vector DB or approximate NN
         $rows = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT secret_id, embedding FROM $table_name WHERE secret_id != %d AND model_version = %s",
+                "SELECT secret_id, embedding FROM {$table} WHERE secret_id != %d AND model_version = %s",
                 $secret_id,
-                $source['model_version']
+                $model
+            ),
+            ARRAY_A
+        );
+        if (!is_array($rows) || $rows === []) return [];
+
+        /** @var array<int,float> $src */
+        $src = array_map(static fn($v) => (float)$v, (array)$source['embedding']);
+
+        $res = [];
+        foreach ($rows as $row) {
+            $vec = json_decode((string)$row['embedding'], true);
+            if (!is_array($vec)) continue;
+
+            /** @var array<int,float> $vec */
+            $vec = array_map(static fn($v) => (float)$v, $vec);
+
+            $sim = self::cosine_similarity($src, $vec);
+            if ($sim >= $min_similarity) {
+                $res[] = ['secret_id' => (int)$row['secret_id'], 'similarity' => (float)round($sim, 4)];
+            }
+        }
+
+        usort($res, static fn($a, $b) => $b['similarity'] <=> $a['similarity']);
+        return array_slice($res, 0, $limit);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // DB helpers, math, utils
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    public static function get_embedding(int $secret_id): ?array
+    {
+        global $wpdb;
+        $table = $wpdb->prefix . 'ps_text_embeddings';
+        /** @var array<string,mixed>|null $row */
+        $row = $wpdb->get_row(
+            $wpdb->prepare("SELECT * FROM {$table} WHERE secret_id = %d", $secret_id),
+            ARRAY_A
+        );
+        if (!$row) return null;
+
+        $decoded = json_decode((string)($row['embedding'] ?? '[]'), true);
+        $row['embedding'] = is_array($decoded) ? $decoded : [];
+        return $row;
+    }
+
+    private static function store_embedding(int $secret_id, string $model, array $embedding, array $payload): bool
+    {
+        global $wpdb;
+        $table = $wpdb->prefix . 'ps_text_embeddings';
+
+        $inputHash = hash('sha256', wp_json_encode([
+            'model' => $model,
+            'payload' => [
+                'secretDescription' => $payload['secretDescription'] ?? null,
+                'topics' => $payload['topics'] ?? [],
+                'feelings' => $payload['feelings'] ?? [],
+                'meanings' => $payload['meanings'] ?? [],
+                'frontText' => $payload['front']['text']['fullText'] ?? null,
+                'backText' => $payload['back']['text']['fullText'] ?? null,
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        $existing = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT input_hash FROM {$table} WHERE secret_id = %d AND model_version = %s",
+                $secret_id,
+                $model
             ),
             ARRAY_A
         );
 
-        $source_vector = $source['embedding'];
-        $results = [];
-
-        foreach ($rows as $row) {
-            $target_vector = json_decode($row['embedding'], true);
-            $similarity = self::cosine_similarity($source_vector, $target_vector);
-
-            if ($similarity >= $min_similarity) {
-                $results[] = [
-                    'secret_id' => (int)$row['secret_id'],
-                    'similarity' => round($similarity, 4),
-                ];
-            }
+        if (is_array($existing) && ($existing['input_hash'] ?? '') === $inputHash) {
+            return true; // unchanged
         }
 
-        // Sort by similarity descending
-        usort($results, fn($a, $b) => $b['similarity'] <=> $a['similarity']);
+        $embeddingJson = wp_json_encode($embedding, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $dimension = count($embedding);
 
-        return array_slice($results, 0, $limit);
+        $result = $wpdb->replace(
+            $table,
+            [
+                'secret_id' => $secret_id,
+                'model_version' => $model,
+                'embedding' => $embeddingJson,
+                'dimension' => $dimension,
+                'input_hash' => $inputHash,
+                'updated_at' => current_time('mysql'),
+            ],
+            ['%d', '%s', '%s', '%d', '%s', '%s']
+        );
+
+        if ($result === false) {
+            error_log("[EmbeddingService] DB write failed for secret {$secret_id}.");
+            return false;
+        }
+        return true;
     }
 
-    /**
-     * Calculate cosine similarity between two vectors.
-     *
-     * @param array $a First vector
-     * @param array $b Second vector
-     * @return float Similarity score (0.0-1.0)
-     */
     private static function cosine_similarity(array $a, array $b): float
     {
-        if (count($a) !== count($b)) {
-            return 0.0;
-        }
+        $na = count($a);
+        if ($na === 0 || $na !== count($b)) return 0.0;
 
         $dot = 0.0;
-        $mag_a = 0.0;
-        $mag_b = 0.0;
-
-        for ($i = 0; $i < count($a); $i++) {
-            $dot += $a[$i] * $b[$i];
-            $mag_a += $a[$i] * $a[$i];
-            $mag_b += $b[$i] * $b[$i];
+        $ma = 0.0;
+        $mb = 0.0;
+        for ($i = 0; $i < $na; $i++) {
+            $ai = (float)$a[$i];
+            $bi = (float)$b[$i];
+            $dot += $ai * $bi;
+            $ma += $ai * $ai;
+            $mb += $bi * $bi;
         }
-
-        $mag_a = sqrt($mag_a);
-        $mag_b = sqrt($mag_b);
-
-        if ($mag_a == 0 || $mag_b == 0) {
-            return 0.0;
-        }
-
-        return $dot / ($mag_a * $mag_b);
+        if ($ma <= 0.0 || $mb <= 0.0) return 0.0;
+        return $dot / (sqrt($ma) * sqrt($mb));
     }
 
-    /**
-     * Delete embedding for a Secret.
-     *
-     * @param int $secret_id Attachment ID
-     * @return bool Success
-     */
-    public static function delete_embedding(int $secret_id): bool
+    private static function normalize_vector(array $vector): array
     {
-        global $wpdb;
-
-        $table_name = $wpdb->prefix . 'ps_text_embeddings';
-
-        $result = $wpdb->delete(
-            $table_name,
-            ['secret_id' => $secret_id],
-            ['%d']
-        );
-
-        return $result !== false;
+        $sumSquares = 0.0;
+        foreach ($vector as $v) {
+            $fv = (float)$v;
+            $sumSquares += $fv * $fv;
+        }
+        if ($sumSquares <= 0.0) return $vector;
+        $mag = sqrt($sumSquares);
+        foreach ($vector as $i => $v) $vector[$i] = (float)$v / $mag;
+        return $vector;
     }
 
-    /**
-     * Get embedding statistics.
-     *
-     * @return array Stats: total count, model versions, etc.
-     */
-    public static function get_stats(): array
+    private static function sanitize_space(string $s): string
     {
-        global $wpdb;
+        $s = preg_replace('/\s+/u', ' ', $s ?? '') ?? '';
+        return trim($s);
+    }
 
-        $table_name = $wpdb->prefix . 'ps_text_embeddings';
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Settings helper
+    // ─────────────────────────────────────────────────────────────────────────────
 
-        $total = $wpdb->get_var("SELECT COUNT(*) FROM $table_name");
-
-        $models = $wpdb->get_results(
-            "SELECT model_version, COUNT(*) as count FROM $table_name GROUP BY model_version",
-            ARRAY_A
-        );
-
-        return [
-            'total' => (int)$total,
-            'by_model' => $models,
-        ];
+    /**
+     * Read a setting from the single-array option, with a default.
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    private static function opt(string $key, $default = null)
+    {
+        $all = get_option(Settings::OPTION, []);
+        if (is_array($all) && array_key_exists($key, $all) && $all[$key] !== '' && $all[$key] !== null) {
+            return $all[$key];
+        }
+        return $default;
     }
 }

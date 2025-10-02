@@ -10,6 +10,14 @@ add_action('wp_enqueue_scripts', function () {
         filemtime(get_stylesheet_directory() . '/assets/css/ps-stream.css')
     );
 
+    // Semantic search styles
+    wp_enqueue_style(
+        'ps-semantic-search',
+        get_stylesheet_directory_uri() . '/assets/css/semantic-search.css',
+        [],
+        filemtime(get_stylesheet_directory() . '/assets/css/semantic-search.css')
+    );
+
     // Mustache (templating) — keep it global so any template can use it
     wp_enqueue_script(
         'mustache',
@@ -25,6 +33,15 @@ add_action('wp_enqueue_scripts', function () {
         get_stylesheet_directory_uri() . '/mode-toggle.js',
         [],
         null,
+        true
+    );
+
+    // Semantic search script (global - needed for header search bar)
+    wp_enqueue_script(
+        'ps-semantic-search',
+        get_stylesheet_directory_uri() . '/assets/js/semantic-search.js',
+        ['mustache'],
+        filemtime(get_stylesheet_directory() . '/assets/js/semantic-search.js'),
         true
     );
 
@@ -71,17 +88,6 @@ add_action('wp_enqueue_scripts', function () {
                 'tags' => $tag_data
             ]);
         }
-    }
-
-    // Search enhancements script (on search pages)
-    if (is_search()) {
-        wp_enqueue_script(
-            'ps-search-enhancements',
-            get_stylesheet_directory_uri() . '/search-enhancements.js',
-            [],
-            null,
-            true
-        );
     }
 
     // Font Awesome 6
