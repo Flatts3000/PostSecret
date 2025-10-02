@@ -40,7 +40,27 @@
             </nav>
             <!-- /wp:html -->
 
-            <!-- wp:search {"label":"Search","showLabel":false,"placeholder":"How do you feel?","buttonText":"Search","buttonPosition":"button-inside","buttonUseIcon":true} /-->
+            <!-- wp:html -->
+            <form role="search" method="get" class="ps-semantic-search" action="/" id="ps-semantic-search-form">
+                <div class="ps-search-wrapper">
+                    <input
+                        type="search"
+                        id="ps-search-input"
+                        name="s"
+                        class="ps-search-input"
+                        placeholder="How do you feel?"
+                        aria-label="Search secrets"
+                        minlength="3"
+                        required
+                    />
+                    <input type="hidden" name="semantic" value="1" />
+                    <button type="submit" class="ps-search-button" aria-label="Search">
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <span class="ps-search-error" role="alert" aria-live="polite"></span>
+            </form>
+            <!-- /wp:html -->
 
             <!-- wp:html -->
             <button class="ps-theme-btn" data-ps-theme-toggle aria-pressed="false" aria-label="Toggle color mode">

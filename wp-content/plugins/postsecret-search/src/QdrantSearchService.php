@@ -121,6 +121,74 @@ final class QdrantSearchService
     }
 
     /**
+     * Search by embedding vector directly (for query embeddings).
+     *
+     * @param array<int,float> $vector Query embedding vector.
+     * @param string $model Model version (for collection selection).
+     * @param int $limit Max results to return.
+     * @param float $min_score Minimum similarity score (0..1).
+     * @param array $filters Optional payload filters.
+     * @return array<int,array{secret_id:int,similarity:float}>|null
+     */
+    public static function search_by_vector(array $vector, string $model, int $limit = 10, float $min_score = 0.5, array $filters = []): ?array
+    {
+        $base = self::qdrant_url();
+        if ($base === null) {
+            return null;
+        }
+
+        $collection = self::qdrant_collection($model);
+
+        // Build filter (no need to exclude source since this is a fresh query)
+        $filter = self::build_qdrant_filter_query($filters);
+
+        $top = max(1, (int)$limit + 3);
+        $scoreThreshold = max(0.0, min(1.0, (float)$min_score));
+
+        $body = [
+            'vector' => array_values(array_map(static fn($v) => (float)$v, $vector)),
+            'top' => $top,
+            'filter' => $filter,
+            'params' => ['hnsw_ef' => 96],
+            'score_threshold' => $scoreThreshold,
+        ];
+
+        /** @var array $body */
+        $body = apply_filters('psai/qdrant/query_search_body', $body, $collection);
+
+        $res = self::qdrant_request('POST', "/collections/{$collection}/points/search", $body, self::HTTP_TIMEOUT_QDRANT);
+        if (!$res || ($res['status'] ?? '') !== 'ok') {
+            return null;
+        }
+
+        $hits = $res['result'] ?? [];
+        if (!is_array($hits) || $hits === []) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($hits as $h) {
+            $id = isset($h['id']) ? (int)$h['id'] : 0;
+            if ($id <= 0) {
+                continue;
+            }
+            $score = (float)($h['score'] ?? 0.0);
+            if ($score < $scoreThreshold) {
+                continue;
+            }
+            $out[] = [
+                'secret_id' => $id,
+                'similarity' => (float)round($score, 4),
+            ];
+            if (count($out) >= $limit) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * MySQL fallback for similarity search (brute-force cosine).
      *
      * @param int $secret_id
@@ -222,6 +290,27 @@ final class QdrantSearchService
      */
     private static function build_qdrant_filter(array $filters, int $excludeId): ?array
     {
+        $filter = self::build_qdrant_filter_query($filters);
+
+        // Exclude the source point.
+        if ($filter === null) {
+            $filter = [];
+        }
+        $filter['must_not'] = [
+            ['has_id' => ['values' => [$excludeId]]],
+        ];
+
+        return $filter === [] ? null : $filter;
+    }
+
+    /**
+     * Build a Qdrant filter object for queries (no exclusion).
+     *
+     * @param array<string,mixed> $filters
+     * @return array<string,mixed>|null
+     */
+    private static function build_qdrant_filter_query(array $filters): ?array
+    {
         $must = [];
         $should = [];
 
@@ -253,11 +342,6 @@ final class QdrantSearchService
         if ($should !== []) {
             $filter['should'] = $should;
         }
-
-        // Exclude the source point.
-        $filter['must_not'] = [
-            ['has_id' => ['values' => [$excludeId]]],
-        ];
 
         return $filter === [] ? null : $filter;
     }

@@ -92,8 +92,8 @@ add_action('rest_api_init', function () {
 
 // Front-page stream (only on home)
 add_action('wp_enqueue_scripts', function () {
-    // load wherever you want — front page only once this works
-    if (is_admin()) return;
+    // Don't load on admin or search pages
+    if (is_admin() || is_search()) return;
 
     $handle = 'psai-stream';
     wp_register_script($handle, plugins_url('assets/psai-stream.js', __FILE__), ['mustache'], null, true);

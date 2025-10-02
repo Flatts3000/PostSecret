@@ -482,7 +482,10 @@ final class EmbeddingService
             $create = [
                 'vectors' => ['size' => $dim, 'distance' => 'Cosine'],
                 'hnsw_config' => ['m' => 16, 'ef_construct' => 200],
-                'optimizers_config' => ['default_segment_number' => 2],
+                'optimizers_config' => [
+                    'default_segment_number' => 2,
+                    'indexing_threshold' => 0,  // Index immediately on every change (good for dev)
+                ],
             ];
             self::qdrant_request('PUT', "/collections/{$collection}", $create, 20);
         }
@@ -643,6 +646,34 @@ final class EmbeddingService
     }
 
     // === Utilities ==========================================================
+
+    /**
+     * Generate embedding for a search query (no storage).
+     *
+     * @param string $query User search query text.
+     * @param string $api_key OpenAI API key.
+     * @param string $model Embedding model ID.
+     * @return array<int,float>|null Normalized embedding vector or null on failure.
+     */
+    public static function generate_query_embedding(string $query, string $api_key, string $model = 'text-embedding-3-small'): ?array
+    {
+        try {
+            $query = trim($query);
+            if ($query === '') {
+                return null;
+            }
+
+            $embedding = self::generate_embedding($api_key, $model, $query);
+            if ($embedding === null) {
+                return null;
+            }
+
+            return self::normalize_vector($embedding);
+        } catch (\Throwable $e) {
+            error_log('[EmbeddingService] Query embedding error: ' . $e->getMessage());
+            return null;
+        }
+    }
 
     /**
      * Service stats (row counts per model).
