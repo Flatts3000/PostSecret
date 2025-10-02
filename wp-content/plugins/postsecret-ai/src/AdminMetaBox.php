@@ -22,7 +22,9 @@ final class AdminMetaBox
     public static function render(\WP_Post $post): void
     {
         // Core metas
-        $tags = get_post_meta($post->ID, '_ps_tags', true) ?: [];
+        $topics = get_post_meta($post->ID, '_ps_topics', true) ?: [];
+        $feelings = get_post_meta($post->ID, '_ps_feelings', true) ?: [];
+        $meanings = get_post_meta($post->ID, '_ps_meanings', true) ?: [];
         $model = get_post_meta($post->ID, '_ps_model', true);
         $pver = get_post_meta($post->ID, '_ps_prompt_version', true);
         $when = get_post_meta($post->ID, '_ps_updated_at', true);
@@ -47,12 +49,19 @@ final class AdminMetaBox
         elseif ($near) $status = 'Near-duplicate';
         elseif ($payload) $status = 'Classified';
 
-        // Action: Process now (normalizes + classifies if needed)
+        // Actions: Process now + Re-classify
         $proc_url = wp_nonce_url(
             admin_url('admin-post.php?action=psai_process_now&att=' . (int)$post->ID),
             'psai_process_now_' . (int)$post->ID
         );
-        echo '<p><a href="' . esc_url($proc_url) . '" class="button button-secondary">Process now</a></p>';
+        $reclassify_url = wp_nonce_url(
+            admin_url('admin-post.php?action=psai_reclassify&att=' . (int)$post->ID),
+            'psai_reclassify_' . (int)$post->ID
+        );
+        echo '<p>';
+        echo '<a href="' . esc_url($proc_url) . '" class="button button-secondary">Process now</a> ';
+        echo '<a href="' . esc_url($reclassify_url) . '" class="button button-secondary" style="margin-left:4px;" onclick="return confirm(\'Re-run AI classification? This will overwrite existing data.\')">Re-classify</a>';
+        echo '</p>';
 
         echo '<div class="psai-box">';
 
@@ -64,17 +73,46 @@ final class AdminMetaBox
         echo '<strong>Review:</strong> <span class="psai-pill psai-rv-' . esc_attr($review) . '">' . esc_html($review) . '</span><br>';
         echo '<strong>Vetted:</strong> ' . esc_html($vetted) . '</p>';
 
-        // Tags
-        if ($tags && is_array($tags)) {
-            echo '<p><strong>Tags:</strong><br>';
-            foreach ($tags as $t) echo '<span class="psai-chip">' . esc_html($t) . '</span> ';
+        // Facets
+        if ($topics && is_array($topics)) {
+            echo '<p><strong>Topics:</strong><br>';
+            foreach ($topics as $t) echo '<span class="psai-chip psai-chip-topic">' . esc_html($t) . '</span> ';
             echo '</p>';
+        }
+        if ($feelings && is_array($feelings)) {
+            echo '<p><strong>Feelings:</strong><br>';
+            foreach ($feelings as $f) echo '<span class="psai-chip psai-chip-feeling">' . esc_html($f) . '</span> ';
+            echo '</p>';
+        }
+        if ($meanings && is_array($meanings)) {
+            echo '<p><strong>Meanings:</strong><br>';
+            foreach ($meanings as $m) echo '<span class="psai-chip psai-chip-meaning">' . esc_html($m) . '</span> ';
+            echo '</p>';
+        }
+
+        // Teaches Wisdom indicator
+        $teachesWisdom = get_post_meta($post->ID, '_ps_teaches_wisdom', true);
+        if ($teachesWisdom === '1') {
+            echo '<p><strong>Teaches Wisdom:</strong> <span class="psai-badge" style="background:#fef3c7;color:#78350f;">✓ Yes</span></p>';
         }
 
         // Model / prompt / timestamp
         echo '<p><strong>Model:</strong> ' . esc_html($model ?: '—') . '<br>';
         echo '<strong>Prompt:</strong> ' . esc_html($pver ?: '—') . '<br>';
         echo '<strong>Updated:</strong> ' . esc_html($when ?: '—') . '</p>';
+
+        // Embedding info
+        $embedding = \PSAI\EmbeddingService::get_embedding($post->ID);
+        if ($embedding) {
+            $dim = $embedding['dimension'];
+            $model_ver = esc_html($embedding['model_version']);
+            $updated = esc_html($embedding['updated_at']);
+            echo '<p><strong>Embedding:</strong> ' . $dim . 'd vector<br>';
+            echo '<strong>Model:</strong> ' . $model_ver . '<br>';
+            echo '<strong>Generated:</strong> ' . $updated . '</p>';
+        } else {
+            echo '<p><strong>Embedding:</strong> <span style="color:#b95000;">Not generated</span></p>';
+        }
 
         // Quick visual metadata
         $orient = get_post_meta($post->ID, '_ps_orientation', true);
@@ -152,6 +190,9 @@ final class AdminMetaBox
         $css = '
         .psai-badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#e9eff5}
         .psai-chip{display:inline-block;margin:2px 4px 0 0;padding:2px 8px;border-radius:12px;background:#f0f2f4;font-size:12px}
+        .psai-chip-topic{background:#e6f3ff;color:#0c4a6e}
+        .psai-chip-feeling{background:#fff4e6;color:#78350f}
+        .psai-chip-meaning{background:#f0fdf4;color:#14532d}
         .psai-dot{display:inline-block;font-weight:700}
         .psai-green{color:#008a20}.psai-blue{color:#2271b1}.psai-gray{color:#777}.psai-amber{color:#b95000}.psai-red{color:#b32d2e}
         .psai-box details{margin-top:6px}

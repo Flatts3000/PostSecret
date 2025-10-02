@@ -23,7 +23,6 @@ if ( file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
 
 use PostSecret\Admin\Routes\SearchRoute;
 use PostSecret\Admin\Routes\ReviewRoute;
-use PostSecret\Admin\Routes\TaxonomyRoute;
 use PostSecret\Admin\Routes\BackfillRoute;
 use PostSecret\Admin\Routes\SettingsRoute;
 
@@ -33,7 +32,6 @@ use PostSecret\Admin\Routes\SettingsRoute;
 function postsecret_admin_bootstrap() {
     new SearchRoute();
     new ReviewRoute();
-    new TaxonomyRoute();
     new BackfillRoute();
     new SettingsRoute();
 }
