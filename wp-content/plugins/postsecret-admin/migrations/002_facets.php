@@ -15,7 +15,7 @@ namespace PostSecret\Admin\Migrations;
  *
  * @global \wpdb $wpdb
  */
-function up() {
+function up_002_facets() {
     global $wpdb;
 
     // Drop ps_tag_alias table - no longer needed with facets

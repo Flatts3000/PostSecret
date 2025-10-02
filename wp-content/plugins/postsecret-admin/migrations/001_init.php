@@ -12,7 +12,7 @@ namespace PostSecret\Admin\Migrations;
  *
  * @global \wpdb $wpdb
  */
-function up() {
+function up_001_init() {
     global $wpdb;
 
     $charset_collate = $wpdb->get_charset_collate();
