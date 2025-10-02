@@ -1,6 +1,748 @@
-/* Base styles for the PostSecret theme */
+/* ========================================
+   PostSecret Archival Gallery Theme
+   Mood: archival but alive, gallery-like, voyeuristic
+   Palette: strict black/white + PostSecret red
+   ======================================== */
+
+/* ----- Typography: clean modern sans-serif ----- */
+:root {
+    --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-display: var(--font-main);
+
+    /* Archival spacing */
+    --content-max-width: 1200px;
+    --breathing-room: clamp(2rem, 5vw, 4rem);
+
+    /* PostSecret red - centralized color tokens */
+    --ps-red-light: #a51818;  /* Light mode red */
+    --ps-red-dark: #E02A2A;   /* Dark mode red */
+
+    /* Helpline section color */
+    --ps-helpline-bg: #b0c7bf;  /* Sage green */
+}
+
 body {
-    font-family: sans-serif;
+    font-family: var(--font-main);
     margin: 0;
     padding: 0;
+    font-size: 16px;
+    line-height: 1.6;
+    background: var(--wp--preset--color--bg);
+    color: var(--wp--preset--color--text);
+}
+
+/* ----- Headlines: large and confident ----- */
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0 0 1rem 0;
+}
+
+h1 { font-size: clamp(2rem, 4vw, 3.5rem); }
+h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); }
+h3 { font-size: clamp(1.25rem, 2.5vw, 2rem); }
+
+/* ----- Eyebrow labels: small uppercase in red ----- */
+.ps-eyebrow {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--wp--preset--color--accent);
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+/* ----- Body text: compact, readable, left-aligned ----- */
+p {
+    margin: 0 0 1rem 0;
+    text-align: left;
+}
+
+/* ----- Narrow centered content column ----- */
+.ps-container,
+.wp-block-group.alignfull {
+    max-width: var(--content-max-width);
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--breathing-room);
+    padding-right: var(--breathing-room);
+}
+
+/* ----- Red up-right arrow motif ↗ ----- */
+.ps-arrow::after {
+    content: " ↗";
+    color: var(--wp--preset--color--accent);
+    font-weight: bold;
+    font-size: 1.1em;
+    display: inline-block;
+    transition: transform 0.2s ease;
+}
+
+.ps-arrow:hover::after {
+    transform: translate(2px, -2px);
+}
+
+/* ----- Links: minimal styling ----- */
+a {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+a:hover {
+    color: var(--wp--preset--color--accent);
+}
+
+/* ----- Focus states: accessible ----- */
+*:focus-visible {
+    outline: 2px solid var(--wp--preset--color--accent);
+    outline-offset: 2px;
+}
+
+/* ----- Form inputs: maintain borders ----- */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+input[type="number"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"],
+input[type="time"],
+textarea,
+select {
+    border: 1px solid var(--wp--preset--color--border);
+    padding: 0.5rem 0.75rem;
+    background: var(--wp--preset--color--bg);
+    color: var(--wp--preset--color--text);
+    font-family: inherit;
+    font-size: 1rem;
+    line-height: 1.5;
+    border-radius: 0;
+    transition: border-color 0.2s ease;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="search"]:focus,
+input[type="tel"]:focus,
+input[type="url"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+input[type="datetime-local"]:focus,
+input[type="month"]:focus,
+input[type="week"]:focus,
+input[type="time"]:focus,
+textarea:focus,
+select:focus {
+    border-color: var(--wp--preset--color--accent);
+    outline: none;
+}
+
+/* ========================================
+   CATALOG CARD COMPONENT
+   Thumbnail left, content right, red arrow
+   ======================================== */
+.ps-catalog-card {
+    border: none;
+    padding: var(--breathing-room) 0;
+    transition: background-color 0.2s ease;
+}
+
+.ps-catalog-card:hover {
+    background-color: var(--wp--preset--color--tint);
+}
+
+.ps-catalog-card__link {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+}
+
+.ps-catalog-card__inner {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+.ps-catalog-card__thumbnail {
+    position: relative;
+    aspect-ratio: 3/4;
+    overflow: hidden;
+    border-radius: 0;
+    background: transparent;
+}
+
+.ps-catalog-card__thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.3s ease;
+}
+
+.ps-catalog-card:hover .ps-catalog-card__thumbnail img {
+    transform: scale(1.05);
+}
+
+.ps-catalog-card__content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.ps-catalog-card__title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 0;
+    color: var(--wp--preset--color--text);
+}
+
+.ps-catalog-card__facets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.ps-facet-chip {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: transparent;
+    border: none;
+    color: var(--wp--preset--color--accent);
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-radius: 0;
+}
+
+.ps-facet-chip--more {
+    opacity: 0.7;
+}
+
+.ps-catalog-card__excerpt {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--wp--preset--color--muted);
+    margin: 0;
+}
+
+/* Mobile responsive: stack vertically */
+@media (max-width: 768px) {
+    .ps-catalog-card__inner {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .ps-catalog-card__thumbnail {
+        aspect-ratio: 16/9;
+        max-width: 100%;
+    }
+}
+
+/* Tablet: smaller thumbnail */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .ps-catalog-card__inner {
+        grid-template-columns: 150px 1fr;
+        gap: 1.5rem;
+    }
+}
+
+/* ========================================
+   BUTTONS & CALLS TO ACTION
+   Minimal and confident
+   ======================================== */
+.ps-btn {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: none;
+    background: transparent;
+    color: var(--wp--preset--color--text);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.ps-btn:hover {
+    background: var(--wp--preset--color--text);
+    color: var(--wp--preset--color--bg);
+}
+
+.ps-btn--primary {
+    color: var(--wp--preset--color--accent);
+}
+
+.ps-btn--primary:hover {
+    background: var(--wp--preset--color--accent);
+    color: #ffffff;
+}
+
+.ps-btn--solid {
+    background: var(--wp--preset--color--accent);
+    color: #ffffff;
+}
+
+.ps-btn--solid:hover {
+    background: var(--ps-red-dark);
+}
+
+/* ========================================
+   SECTIONS & SPACING
+   Long scrollable panels with breathing room
+   ======================================== */
+.ps-section {
+    padding: clamp(3rem, 8vw, 6rem) 0;
+    border: none;
+}
+
+.ps-section--tinted {
+    background: var(--wp--preset--color--tint);
+}
+
+.ps-section__header {
+    margin-bottom: clamp(2rem, 5vw, 4rem);
+    text-align: left;
+}
+
+.ps-section__title {
+    font-size: clamp(2rem, 4vw, 3rem);
+    margin-bottom: 0.5rem;
+}
+
+/* ========================================
+   FOOTER & HEADER
+   Utilitarian, small caps, negative space
+   ======================================== */
+.ps-header {
+    border: none;
+    width: 100%;
+}
+
+/* Header inner container - constrained to max-width */
+.ps-header__inner {
+    max-width: var(--content-max-width);
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--breathing-room);
+    padding-right: var(--breathing-room);
+    width: 100%;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: var(--breathing-room);
+}
+
+/* Header right group */
+.ps-header__right {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 1.5rem;
+}
+
+/* Responsive header */
+@media (max-width: 768px) {
+    .ps-header {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+
+    .ps-header__inner {
+        flex-wrap: wrap !important;
+        gap: 1rem;
+    }
+
+    .ps-header__logo {
+        flex: 0 0 auto;
+    }
+
+    .ps-logo {
+        height: 40px !important;
+        width: auto !important;
+    }
+
+    .ps-header__right {
+        flex-wrap: wrap !important;
+        gap: 0.75rem !important;
+        width: 100%;
+        justify-content: space-between !important;
+    }
+
+    .ps-social {
+        gap: 0.5rem !important;
+        order: 1;
+    }
+
+    .ps-social__link {
+        font-size: 1rem !important;
+        min-width: 32px;
+        min-height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .ps-search {
+        order: 3;
+        flex: 1 1 100%;
+        width: 100%;
+    }
+
+    .ps-search__input {
+        flex: 1;
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .ps-theme-toggle {
+        order: 2;
+    }
+}
+
+.ps-footer {
+    background: var(--wp--preset--color--text);
+    color: var(--wp--preset--color--bg);
+    padding: 2rem var(--breathing-room);
+    font-size: 0.875rem;
+}
+
+.ps-footer a {
+    color: var(--wp--preset--color--bg);
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+}
+
+.ps-footer a:hover {
+    opacity: 1;
+    color: var(--wp--preset--color--accent);
+}
+
+/* Dark mode footer (inverted) */
+html[data-theme="dark"] .ps-footer {
+    background: #ffffff;
+    color: #000000;
+}
+
+html[data-theme="dark"] .ps-footer a {
+    color: #000000;
+}
+
+html[data-theme="dark"] .ps-footer a:hover {
+    color: var(--wp--preset--color--accent);
+}
+
+/* ========================================
+   IMAGERY
+   Postcards dominate, generous, crisp
+   ======================================== */
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+.ps-hero-collage {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin: 2rem 0;
+}
+
+.ps-hero-collage__item {
+    position: relative;
+    transform: rotate(-1deg);
+    transition: transform 0.3s ease;
+}
+
+.ps-hero-collage__item:nth-child(even) {
+    transform: rotate(1deg);
+}
+
+.ps-hero-collage__item:hover {
+    transform: rotate(0deg) scale(1.02);
+    z-index: 10;
+}
+
+.ps-hero-collage__item img {
+    border: none;
+    box-shadow: none;
+}
+
+/* ========================================
+   HERO SECTION - Dark backdrop variant
+   ======================================== */
+/* Hero wrapper - no background */
+.ps-hero--dark {
+    background: none;
+    border-radius: 0;
+    padding-inline: clamp(12px, 4vw, 24px);
+}
+
+/* Align columns vertically and clamp line-length */
+.ps-hero__copy {
+    display: flex;
+    align-items: center;
+}
+
+.ps-hero__dek {
+    max-width: 34ch;                 /* readable line length */
+}
+
+/* Text color: red in dark mode, dark red in light mode */
+html[data-theme="dark"] .ps-hero__dek,
+html[data-theme="dark"] .ps-hero__dek.has-text-color,
+html[data-theme="dark"] p.ps-hero__dek,
+html[data-theme="dark"] p.ps-hero__dek.has-text-color {
+    color: var(--ps-red-dark) !important;       /* PostSecret red in dark mode */
+}
+
+html[data-theme="light"] .ps-hero__dek,
+html[data-theme="light"] .ps-hero__dek.has-text-color,
+html[data-theme="light"] p.ps-hero__dek,
+html[data-theme="light"] p.ps-hero__dek.has-text-color,
+.ps-hero__dek,
+.ps-hero__dek.has-text-color,
+p.ps-hero__dek,
+p.ps-hero__dek.has-text-color {
+    color: var(--ps-red-light) !important;       /* Dark red in light mode */
+}
+
+/* Visual: center the postcard, keep it crisp */
+.ps-hero__visual {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ps-hero__card {
+    position: relative;
+    display: inline-block;
+    text-decoration: none;
+}
+
+.ps-hero__img {
+    width: min(720px, 100%);          /* responsive cap - bigger */
+    height: auto;
+    display: block;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+    border-radius: 2px;
+}
+
+/* Badge: treat as caption/link under the image */
+.ps-hero__badge {
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 0.95rem;
+    color: var(--wp--preset--color--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+/* Reduce top/bottom density on small screens */
+@media (max-width: 720px) {
+    .ps-hero--dark {
+        padding-block: 40px;
+    }
+    .ps-hero__dek {
+        font-size: 1.1rem;
+        line-height: 1.4;
+    }
+}
+
+/* ========================================
+   HELPLINE SUPPORT BAND
+   Full-bleed soft green band, dark text, clear hierarchy
+   ======================================== */
+.ps-helpline-section {
+    background: var(--ps-helpline-bg) !important;
+    width: 100%;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+html[data-theme="light"] .ps-helpline-section {
+    background: var(--ps-helpline-bg) !important;
+}
+
+html[data-theme="dark"] .ps-helpline-section {
+    background: var(--ps-helpline-bg) !important;
+}
+
+/* Ensure inner WordPress group doesn't add padding */
+.ps-helpline-section > .wp-block-group {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+.ps-helpline-card {
+    display: grid;
+    grid-template-columns: 1fr 600px;
+    gap: 48px;
+    align-items: center;
+    padding-top: 72px !important;
+    padding-bottom: 72px !important;
+    padding-left: 0;
+    padding-right: 0;
+    color: #1a1a1a;
+}
+
+.ps-helpline-card__content {
+    max-width: 65ch;
+    min-width: 0;
+}
+
+.ps-helpline-card__visual {
+    width: 600px;
+    flex-shrink: 0;
+}
+
+.ps-helpline-card__visual img,
+.ps-helpline-card__visual img[src*="helpline.png"] {
+    width: 600px !important;
+    max-width: 600px !important;
+    height: auto !important;
+    display: block !important;
+}
+
+.ps-helpline-card__title {
+    font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0 0 1.5rem 0;
+    color: #1a1a1a;
+    max-width: 32ch;
+    text-decoration: none;
+}
+
+.ps-helpline-card__text {
+    font-size: 18px !important;
+    font-weight: 400 !important;
+    line-height: 1.7;
+    margin: 0 0 1rem 0;
+    color: #1a1a1a;
+    max-width: 65ch;
+}
+
+.ps-helpline-card__text:last-of-type {
+    margin-bottom: 2rem;
+}
+
+/* Inline links - red, underline on hover/focus */
+.ps-helpline-card__link {
+    color: var(--wp--preset--color--accent);
+    text-decoration: none;
+    font-weight: inherit;
+    transition: text-decoration 0.2s ease;
+}
+
+.ps-helpline-card__link:hover,
+.ps-helpline-card__link:focus {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 2px;
+}
+
+.ps-helpline-card__link:focus {
+    outline: 2px solid var(--wp--preset--color--accent);
+    outline-offset: 2px;
+}
+
+/* Primary CTA link with red arrow */
+.ps-helpline-card__cta {
+    display: inline-block;
+    color: var(--wp--preset--color--accent);
+    font-size: 1.125rem;
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-thickness: 3px;
+    text-underline-offset: 5px;
+    transition: all 0.2s ease;
+}
+
+.ps-helpline-card__cta:hover {
+    text-decoration-thickness: 4px;
+    text-underline-offset: 6px;
+    color: var(--ps-red-dark);
+}
+
+.ps-helpline-card__cta:focus {
+    outline: 2px solid var(--wp--preset--color--accent);
+    outline-offset: 3px;
+}
+
+.ps-helpline-card__cta span {
+    color: var(--wp--preset--color--accent);
+    margin-left: 6px;
+    font-size: 1.1em;
+}
+
+/* Hide WordPress external link icon */
+.ps-helpline-card__cta .external-link-icon,
+.ps-helpline-card__cta svg,
+.ps-helpline-card__cta img,
+.ps-helpline-card__cta::after {
+    display: none !important;
+}
+
+/* Also hide any auto-inserted icons */
+a.ps-helpline-card__cta .external-link-icon,
+a.ps-helpline-card__cta svg,
+a.ps-helpline-card__cta img {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* Responsive: stack on mobile */
+@media (max-width: 768px) {
+    .ps-helpline-card {
+        grid-template-columns: 1fr !important;
+        gap: 2rem !important;
+    }
+
+    .ps-helpline-card__visual {
+        order: 2;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .ps-helpline-card__visual img {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        height: auto !important;
+    }
+
+    .ps-helpline-card__content {
+        order: 1;
+    }
+}
+
+/* ========================================
+   REDUCED MOTION
+   ======================================== */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }

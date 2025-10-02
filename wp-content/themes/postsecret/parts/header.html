@@ -1,73 +1,56 @@
-<!-- wp:group {"className":"ps-header ps-header--frost","style":{"spacing":{"padding":{"top":"var:preset|spacing|40","bottom":"var:preset|spacing|40","left":"var:preset|spacing|50","right":"var:preset|spacing|50"},"blockGap":"var:preset|spacing|30"},"border":{"bottom":{"color":"var(--wp--preset--color--border)","width":"1px"}}},"layout":{"type":"flex","flexWrap":"nowrap","justifyContent":"space-between","verticalAlignment":"center"}} -->
-<div class="wp-block-group ps-header ps-header--frost" style="border-bottom:1px solid var(--wp--preset--color--border);padding-top:var(--wp--preset--spacing--40);padding-right:var(--wp--preset--spacing--50);padding-bottom:var(--wp--preset--spacing--40);padding-left:var(--wp--preset--spacing--50)">
+<!-- wp:group {"className":"ps-header","style":{"spacing":{"padding":{"top":"var:preset|spacing|30","bottom":"var:preset|spacing|30"}}},"layout":{"type":"constrained","contentSize":"1200px"}} -->
+<div class="wp-block-group ps-header" style="padding-top:var(--wp--preset--spacing--30);padding-bottom:var(--wp--preset--spacing--30)">
 
-    <!-- LEFT: Logo -->
-    <!-- wp:html -->
-    <a class="ps-header__logo" href="/" aria-label="PostSecret Home">
-        <img
+    <!-- wp:group {"layout":{"type":"flex","flexWrap":"nowrap","justifyContent":"space-between","verticalAlignment":"center"}} -->
+    <div class="wp-block-group">
+
+        <!-- Logo -->
+        <!-- wp:html -->
+        <a class="ps-header__logo" href="/" aria-label="PostSecret Home">
+            <img
                 class="ps-logo"
                 src="/wp-content/themes/postsecret/assets/postsecret-logo-light.png"
                 data-light-src="/wp-content/themes/postsecret/assets/postsecret-logo-light.png"
                 data-dark-src="/wp-content/themes/postsecret/assets/postsecret-logo-dark.png"
                 alt="PostSecret"
-                height="56"
+                width="172"
+                height="52"
                 loading="eager"
                 decoding="async"
-        />
-    </a>
-    <!-- /wp:html -->
-
-    <!-- RIGHT: Socials + Theme toggle + Search -->
-    <!-- wp:group {"className":"ps-header__right","layout":{"type":"flex","flexWrap":"nowrap","justifyContent":"right","verticalAlignment":"center"}} -->
-    <div class="wp-block-group ps-header__right">
-
-        <!-- Socials (accessible, subtle hover) -->
-        <!-- wp:html -->
-        <nav class="ps-social" aria-label="PostSecret social links">
-            <a href="https://www.facebook.com/postsecret/" class="ps-social__link" target="_blank" rel="noopener" aria-label="Facebook">
-                <i class="fa-brands fa-facebook" aria-hidden="true"></i>
-                <span class="screen-reader-text">Facebook</span>
-            </a>
-            <a href="https://bsky.app/profile/postsecret.com" class="ps-social__link" target="_blank" rel="noopener" aria-label="Bluesky">
-                <i class="fa-brands fa-bluesky" aria-hidden="true"></i>
-                <span class="screen-reader-text">Bluesky</span>
-            </a>
-            <a href="https://www.instagram.com/postsecret/" class="ps-social__link" target="_blank" rel="noopener" aria-label="Instagram">
-                <i class="fa-brands fa-instagram" aria-hidden="true"></i>
-                <span class="screen-reader-text">Instagram</span>
-            </a>
-            <a href="https://www.threads.net/@postsecret?hl=en" class="ps-social__link" target="_blank" rel="noopener" aria-label="Threads">
-                <i class="fa-brands fa-threads" aria-hidden="true"></i>
-                <span class="screen-reader-text">Threads</span>
-            </a>
-        </nav>
+            />
+        </a>
         <!-- /wp:html -->
 
-        <!-- Archive Search (fast, minimal, CPT=secret) -->
-        <!-- wp:html -->
-        <form class="ps-search" role="search" method="get" action="/">
-            <input class="ps-search__input" type="search" name="s" placeholder="Search secrets…" aria-label="Search secrets"/>
-            <input type="hidden" name="post_type" value="secret"/>
-            <button class="ps-search__btn" type="submit" aria-label="Submit search">
-                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <!-- Navigation with mobile overlay -->
+        <!-- wp:navigation {"overlayMenu":"mobile","layout":{"type":"flex","justifyContent":"right"},"style":{"spacing":{"blockGap":"var:preset|spacing|40"}}} -->
+            <!-- wp:html -->
+            <nav class="ps-social" aria-label="PostSecret social links">
+                <a href="https://www.facebook.com/postsecret/" class="ps-social__link" target="_blank" rel="noopener" aria-label="Facebook">
+                    <i class="fa-brands fa-facebook" aria-hidden="true"></i>
+                </a>
+                <a href="https://bsky.app/profile/postsecret.com" class="ps-social__link" target="_blank" rel="noopener" aria-label="Bluesky">
+                    <i class="fa-brands fa-bluesky" aria-hidden="true"></i>
+                </a>
+                <a href="https://www.instagram.com/postsecret/" class="ps-social__link" target="_blank" rel="noopener" aria-label="Instagram">
+                    <i class="fa-brands fa-instagram" aria-hidden="true"></i>
+                </a>
+                <a href="https://www.threads.net/@postsecret?hl=en" class="ps-social__link" target="_blank" rel="noopener" aria-label="Threads">
+                    <i class="fa-brands fa-threads" aria-hidden="true"></i>
+                </a>
+            </nav>
+            <!-- /wp:html -->
+
+            <!-- wp:search {"label":"Search","showLabel":false,"placeholder":"How do you feel?","buttonText":"Search","buttonPosition":"button-inside","buttonUseIcon":true} /-->
+
+            <!-- wp:html -->
+            <button class="ps-theme-btn" data-ps-theme-toggle aria-pressed="false" aria-label="Toggle color mode">
+                <i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i>
             </button>
-        </form>
-        <!-- /wp:html -->
+            <!-- /wp:html -->
+        <!-- /wp:navigation -->
 
-        <!-- Theme toggle (borderless pill) -->
-        <!-- wp:buttons {"className":"ps-theme-toggle"} -->
-        <div class="wp-block-buttons ps-theme-toggle">
-            <!-- wp:button {"className":"ps-toggle"} -->
-            <div class="wp-block-button ps-toggle">
-                <button class="wp-block-button__link wp-element-button" data-ps-theme-toggle aria-pressed="false" aria-label="Toggle color mode">
-                    <i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i>
-                    <span class="screen-reader-text">Toggle color mode</span>
-                </button>
-            </div>
-            <!-- /wp:button -->
-        </div>
-        <!-- /wp:buttons -->
     </div>
     <!-- /wp:group -->
+
 </div>
 <!-- /wp:group -->

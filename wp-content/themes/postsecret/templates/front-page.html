@@ -1,24 +1,25 @@
 <!-- wp:template-part {"slug":"header","tagName":"header"} /-->
 
-<!-- wp:group {"tagName":"main","style":{"spacing":{"blockGap":"0","margin":{"top":"0"},"padding":{"top":"0","bottom":"var:preset|spacing|50","left":"var:preset|spacing|50","right":"var:preset|spacing|50"}}},"layout":{"type":"constrained"}} -->
-<main class="wp-block-group" style="margin-top:0;padding-top:1rem;padding-right:var(--wp--preset--spacing--50);padding-bottom:var(--wp--preset--spacing--50);padding-left:var(--wp--preset--spacing--50)">
+<!-- wp:group {"tagName":"main","style":{"spacing":{"blockGap":"0","margin":{"top":"0","bottom":"0"},"padding":{"top":"0","bottom":"0","left":"var:preset|spacing|50","right":"var:preset|spacing|50"}}},"layout":{"type":"constrained"}} -->
+<main class="wp-block-group" style="margin-top:0;margin-bottom:0;padding-top:0;padding-right:var(--wp--preset--spacing--50);padding-bottom:0;padding-left:var(--wp--preset--spacing--50)">
 
     <!-- HERO -->
-    <!-- (unchanged; keeping your existing hero exactly as-is) -->
-    <!-- wp:group {"className":"ps-hero","style":{"spacing":{"padding":{"top":"clamp(48px,8vw,96px)","bottom":"clamp(48px,8vw,96px)"},"blockGap":"0"}},"layout":{"type":"constrained","contentSize":"1200px"}} -->
-    <div class="wp-block-group ps-hero" style="padding-top:clamp(48px,8vw,96px);padding-bottom:clamp(48px,8vw,96px)">
-        <!-- wp:columns {"isStackedOnMobile":true,"style":{"spacing":{"blockGap":"clamp(24px,4vw,48px)"}}} -->
+    <!-- wp:group {"className":"ps-hero ps-hero--dark","style":{"spacing":{"padding":{"top":"clamp(56px,8vw,112px)","bottom":"clamp(56px,8vw,112px)"},"blockGap":"0"}},"layout":{"type":"constrained","contentSize":"1200px"}} -->
+    <div class="wp-block-group ps-hero ps-hero--dark" style="padding-top:clamp(56px,8vw,112px);padding-bottom:clamp(56px,8vw,112px)">
+        <!-- wp:columns {"isStackedOnMobile":true,"style":{"spacing":{"blockGap":"clamp(24px,4vw,56px)"}}} -->
         <div class="wp-block-columns">
-            <!-- wp:column {"width":"52%"} -->
-            <div class="wp-block-column" style="flex-basis:52%">
-                <!-- wp:paragraph {"style":{"typography":{"fontSize":"clamp(1.05rem,1.8vw,1.25rem)","lineHeight":"1.6"},"color":{"text":"var:preset|color|muted"},"spacing":{"margin":{"top":"12px","bottom":"28px"}}}} -->
-                <p class="has-text-color" style="color:var(--wp--preset--color--muted);margin-top:12px;margin-bottom:28px;font-size:clamp(1.05rem,1.8vw,1.25rem);line-height:1.6">
+            <!-- Left: copy -->
+            <!-- wp:column {"width":"52%","className":"ps-hero__copy"} -->
+            <div class="wp-block-column ps-hero__copy" style="flex-basis:52%">
+                <!-- wp:paragraph {"className":"ps-hero__dek has-text-color","style":{"typography":{"fontSize":"clamp(1.25rem,2.4vw,1.75rem)","lineHeight":"1.35","fontWeight":"500"},"spacing":{"margin":{"top":"0","bottom":"0"}}}} -->
+                <p class="ps-hero__dek has-text-color" style="margin-top:0;margin-bottom:0;font-size:clamp(1.25rem,2.4vw,1.75rem);line-height:1.35;font-weight:500">
                     This is a living museum of anonymous postcards. Thousands of real secrets, no ads, just humanity.
                 </p>
                 <!-- /wp:paragraph -->
             </div>
             <!-- /wp:column -->
 
+            <!-- Right: card -->
             <!-- wp:column {"width":"48%","className":"ps-hero__visual"} -->
             <div class="wp-block-column ps-hero__visual" style="flex-basis:48%">
                 <!-- wp:html -->
@@ -113,6 +114,35 @@
     <!-- /wp:group -->
 
 </main>
+<!-- /wp:group -->
+
+<!-- HELPLINE SUPPORT SECTION - Full bleed outside main -->
+<!-- wp:group {"className":"ps-helpline-section","style":{"spacing":{"padding":{"top":"0","bottom":"0"}}},"layout":{"type":"default"}} -->
+<div class="wp-block-group ps-helpline-section">
+    <!-- wp:group {"layout":{"type":"constrained","contentSize":"1200px"}} -->
+    <div class="wp-block-group">
+        <!-- wp:html -->
+        <div class="ps-helpline-card">
+            <div class="ps-helpline-card__content">
+                <h2 class="ps-helpline-card__title">Some secrets are too heavy to carry alone.</h2>
+                <p class="ps-helpline-card__text">
+                    There's someone who cares. And they're ready to listen. You don't have to give your name. You can share as much or as little as you want.
+                </p>
+                <p class="ps-helpline-card__text">
+                    Talk by phone, text, or online chat. Whatever feels easiest.
+                </p>
+                <a href="https://findahelpline.com/i/postsecret" class="ps-helpline-card__cta" target="_blank" rel="noopener nofollow">
+                    Click here for free anonymous support<span aria-hidden="true">↗</span>
+                </a>
+            </div>
+            <div class="ps-helpline-card__visual">
+                <img src="/wp-content/themes/postsecret/assets/helpline.png" alt="Helpline support" width="600" height="400" loading="lazy" decoding="async" />
+            </div>
+        </div>
+        <!-- /wp:html -->
+    </div>
+    <!-- /wp:group -->
+</div>
 <!-- /wp:group -->
 
 <!-- wp:template-part {"slug":"footer","tagName":"footer"} /-->
