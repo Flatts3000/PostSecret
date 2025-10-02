@@ -200,6 +200,11 @@ final class Classifier
      */
     private static function buildVisionContent(string $frontUrl, ?string $backUrl, string $detail): array
     {
+        $allowed_details = ['low', 'high', 'auto'];
+        if (!in_array($detail, $allowed_details, true)) {
+            $detail = 'high';
+        }
+
         $content = [
             ['type' => 'text', 'text' => 'SIDE: front'],
             ['type' => 'image_url', 'image_url' => ['url' => $frontUrl, 'detail' => $detail]],
