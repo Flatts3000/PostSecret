@@ -1,7 +1,7 @@
 /* ========================================
    PostSecret Archival Gallery Theme
    Mood: archival but alive, gallery-like, voyeuristic
-   Palette: strict black/white + PostSecret red (#e63946)
+   Palette: strict black/white + PostSecret red
    ======================================== */
 
 /* ----- Typography: clean modern sans-serif ----- */
@@ -13,10 +13,9 @@
     --content-max-width: 1200px;
     --breathing-room: clamp(2rem, 5vw, 4rem);
 
-    /* PostSecret red variations */
-    --ps-red: #e63946;
-    --ps-red-dark: #c02a36;
-    --ps-red-light: #ff5563;
+    /* PostSecret red - centralized color tokens */
+    --ps-red-light: #a51818;  /* Light mode red */
+    --ps-red-dark: #E02A2A;   /* Dark mode red */
 }
 
 body {
@@ -458,7 +457,7 @@ html[data-theme="dark"] .ps-hero__dek,
 html[data-theme="dark"] .ps-hero__dek.has-text-color,
 html[data-theme="dark"] p.ps-hero__dek,
 html[data-theme="dark"] p.ps-hero__dek.has-text-color {
-    color: #e63946 !important;       /* PostSecret red in dark mode */
+    color: var(--ps-red-dark) !important;       /* PostSecret red in dark mode */
 }
 
 html[data-theme="light"] .ps-hero__dek,
@@ -469,7 +468,7 @@ html[data-theme="light"] p.ps-hero__dek.has-text-color,
 .ps-hero__dek.has-text-color,
 p.ps-hero__dek,
 p.ps-hero__dek.has-text-color {
-    color: #c02a36 !important;       /* Dark red in light mode */
+    color: var(--ps-red-light) !important;       /* Dark red in light mode */
 }
 
 /* Visual: center the postcard, keep it crisp */
@@ -498,7 +497,7 @@ p.ps-hero__dek.has-text-color {
     display: inline-block;
     margin-top: 10px;
     font-size: 0.95rem;
-    color: #e63946;                  /* PostSecret red */
+    color: var(--wp--preset--color--accent);
     text-decoration: underline;
     text-underline-offset: 2px;
 }

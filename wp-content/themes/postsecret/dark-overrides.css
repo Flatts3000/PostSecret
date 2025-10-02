@@ -1,3 +1,9 @@
+/* PostSecret red - centralized color tokens */
+:root {
+  --ps-red-light: #a51818;  /* Light mode red */
+  --ps-red-dark: #E02A2A;   /* Dark mode red */
+}
+
 /* Override WP preset vars when user toggles themes
    PostSecret archival palette: black/white foundation + PostSecret red accent */
 html[data-theme="dark"],
@@ -6,7 +12,7 @@ html[data-theme="dark"],
   --wp--preset--color--surface: #0a0a0a !important;
   --wp--preset--color--text:    #ffffff !important;
   --wp--preset--color--muted:   #999999 !important;
-  --wp--preset--color--accent:  #e63946 !important; /* PostSecret red */
+  --wp--preset--color--accent:  var(--ps-red-dark) !important; /* PostSecret red */
   --wp--preset--color--border:  #333333 !important;
   --wp--preset--color--tint:    #1a0a0b !important; /* soft red tint for sections */
 }
@@ -17,7 +23,7 @@ html[data-theme="light"],
   --wp--preset--color--surface: #fafafa !important;
   --wp--preset--color--text:    #000000 !important;
   --wp--preset--color--muted:   #666666 !important;
-  --wp--preset--color--accent:  #e63946 !important; /* PostSecret red */
+  --wp--preset--color--accent:  var(--ps-red-light) !important; /* PostSecret red */
   --wp--preset--color--border:  #e6e6e6 !important;
   --wp--preset--color--tint:    #fff5f5 !important; /* soft pink tint for sections */
 }
@@ -370,7 +376,7 @@ html[data-theme="dark"] .ps-search__input::placeholder {
 .ps-footer {
   background: var(--wp--preset--color--bg);
   color: var(--wp--preset--color--text);
-  border-top: 1px solid var(--wp--preset--color--border);
+  border-top: none;
 }
 
 /* Footer logo */
@@ -405,7 +411,7 @@ html[data-theme="dark"] .ps-search__input::placeholder {
 }
 
 .ps-help-card:hover {
-  background: var(--ps-red-dark, #c02a36);
+  background: var(--ps-red-light);
   color: #ffffff;
   transform: none;
   box-shadow: none;
@@ -527,7 +533,7 @@ html[data-theme="dark"] .ps-share-section__title {
 html[data-theme="dark"] .ps-hero--dark .ps-hero__dek,
 html[data-theme="dark"] .ps-hero--dark .ps-hero__dek.has-text-color,
 html[data-theme="dark"] .ps-hero--dark p.ps-hero__dek {
-    color: #e63946 !important;       /* PostSecret red in dark mode */
+    color: var(--ps-red-dark) !important;       /* PostSecret red in dark mode */
 }
 
 html[data-theme="light"] .ps-hero--dark .ps-hero__dek,
@@ -536,7 +542,7 @@ html[data-theme="light"] .ps-hero--dark p.ps-hero__dek,
 .ps-hero--dark .ps-hero__dek,
 .ps-hero--dark .ps-hero__dek.has-text-color,
 .ps-hero--dark p.ps-hero__dek {
-    color: #c02a36 !important;       /* Dark red in light mode */
+    color: var(--ps-red-light) !important;       /* Dark red in light mode */
 }
 
 .ps-hero__visual {
@@ -612,7 +618,7 @@ html[data-theme="dark"] .ps-hero__card:hover {
 
 .ps-pill:hover,
 .wp-block-button__link:hover {
-    background: var(--ps-red-dark, #c02a36);
+    background: var(--ps-red-light);
     color: #ffffff;
 }
 
