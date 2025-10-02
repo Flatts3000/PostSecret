@@ -1,7 +1,7 @@
 <!-- wp:template-part {"slug":"header","tagName":"header"} /-->
 
-<!-- wp:group {"tagName":"main","style":{"spacing":{"blockGap":"0","margin":{"top":"0"},"padding":{"top":"0","bottom":"var:preset|spacing|50","left":"var:preset|spacing|50","right":"var:preset|spacing|50"}}},"layout":{"type":"constrained"}} -->
-<main class="wp-block-group" style="margin-top:0;padding-top:0;padding-right:var(--wp--preset--spacing--50);padding-bottom:var(--wp--preset--spacing--50);padding-left:var(--wp--preset--spacing--50)">
+<!-- wp:group {"tagName":"main","style":{"spacing":{"blockGap":"0","margin":{"top":"0","bottom":"0"},"padding":{"top":"0","bottom":"0","left":"var:preset|spacing|50","right":"var:preset|spacing|50"}}},"layout":{"type":"constrained"}} -->
+<main class="wp-block-group" style="margin-top:0;margin-bottom:0;padding-top:0;padding-right:var(--wp--preset--spacing--50);padding-bottom:0;padding-left:var(--wp--preset--spacing--50)">
 
     <!-- HERO -->
     <!-- wp:group {"className":"ps-hero ps-hero--dark","style":{"spacing":{"padding":{"top":"clamp(56px,8vw,112px)","bottom":"clamp(56px,8vw,112px)"},"blockGap":"0"}},"layout":{"type":"constrained","contentSize":"1200px"}} -->
@@ -114,6 +114,35 @@
     <!-- /wp:group -->
 
 </main>
+<!-- /wp:group -->
+
+<!-- HELPLINE SUPPORT SECTION - Full bleed outside main -->
+<!-- wp:group {"className":"ps-helpline-section","style":{"spacing":{"padding":{"top":"0","bottom":"0"}}},"layout":{"type":"default"}} -->
+<div class="wp-block-group ps-helpline-section">
+    <!-- wp:group {"layout":{"type":"constrained","contentSize":"1200px"}} -->
+    <div class="wp-block-group">
+        <!-- wp:html -->
+        <div class="ps-helpline-card">
+            <div class="ps-helpline-card__content">
+                <h2 class="ps-helpline-card__title">Some secrets are too heavy to carry alone.</h2>
+                <p class="ps-helpline-card__text">
+                    There's someone who cares. And they're ready to listen. You don't have to give your name. You can share as much or as little as you want.
+                </p>
+                <p class="ps-helpline-card__text">
+                    Talk by phone, text, or online chat. Whatever feels easiest.
+                </p>
+                <a href="https://findahelpline.com/i/postsecret" class="ps-helpline-card__cta" target="_blank" rel="noopener nofollow">
+                    Click here for free anonymous support<span aria-hidden="true">↗</span>
+                </a>
+            </div>
+            <div class="ps-helpline-card__visual">
+                <img src="/wp-content/themes/postsecret/assets/helpline.png" alt="Helpline support" width="600" height="400" loading="lazy" decoding="async" />
+            </div>
+        </div>
+        <!-- /wp:html -->
+    </div>
+    <!-- /wp:group -->
+</div>
 <!-- /wp:group -->
 
 <!-- wp:template-part {"slug":"footer","tagName":"footer"} /-->

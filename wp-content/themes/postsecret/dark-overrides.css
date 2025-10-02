@@ -2,6 +2,7 @@
 :root {
   --ps-red-light: #a51818;  /* Light mode red */
   --ps-red-dark: #E02A2A;   /* Dark mode red */
+  --ps-helpline-bg: #b0c7bf;  /* Sage green for helpline section */
 }
 
 /* Override WP preset vars when user toggles themes
@@ -164,6 +165,11 @@ input:focus {
 /* -----------------------
  * Header & Logo Styles
  * -----------------------*/
+.ps-header {
+  background: var(--wp--preset--color--bg);
+  color: var(--wp--preset--color--text);
+}
+
 .ps-header__logo {
   display: inline-block;
   line-height: 0;
@@ -172,6 +178,65 @@ input:focus {
 
 .ps-header__logo:hover {
   opacity: 0.8;
+}
+
+/* WordPress Navigation Block - respect theme colors */
+.wp-block-navigation {
+  background: transparent;
+}
+
+.wp-block-navigation a {
+  color: var(--wp--preset--color--text);
+}
+
+.wp-block-navigation a:hover {
+  color: var(--wp--preset--color--accent);
+}
+
+/* Mobile overlay - respect theme */
+.wp-block-navigation__responsive-container.is-menu-open {
+  background: var(--wp--preset--color--bg) !important;
+  color: var(--wp--preset--color--text) !important;
+}
+
+.wp-block-navigation__responsive-container-content {
+  background: var(--wp--preset--color--bg) !important;
+  padding-right: 2rem !important;
+  padding-left: 2rem !important;
+}
+
+.wp-block-navigation__responsive-container-content > * {
+  padding-right: 1rem;
+}
+
+/* Hamburger button colors */
+.wp-block-navigation__responsive-container-open,
+.wp-block-navigation__responsive-container-close {
+  background: transparent !important;
+  color: var(--wp--preset--color--text) !important;
+  border: none !important;
+}
+
+.wp-block-navigation__responsive-container-open:hover,
+.wp-block-navigation__responsive-container-close:hover {
+  color: var(--wp--preset--color--accent) !important;
+}
+
+/* Search block in navigation */
+.wp-block-navigation .wp-block-search__input {
+  background: var(--wp--preset--color--bg);
+  color: var(--wp--preset--color--text);
+  border: 1px solid var(--wp--preset--color--border);
+}
+
+.wp-block-navigation .wp-block-search__button {
+  background: var(--wp--preset--color--text);
+  color: var(--wp--preset--color--bg);
+}
+
+.wp-block-navigation .wp-block-search__button:hover {
+  background: var(--wp--preset--color--accent);
+  color: #ffffff;
 }
 
 .ps-logo {
@@ -893,4 +958,114 @@ html[data-theme="dark"] .ps-search-info {
 html[data-theme="dark"] .ps-highlight {
     background: var(--wp--preset--color--accent) !important;
     color: var(--wp--preset--color--bg) !important;
+}
+
+/* ----- Helpline Section ----- */
+.ps-helpline-section {
+    background: var(--ps-helpline-bg) !important;
+}
+
+html[data-theme="dark"] .ps-helpline-section {
+    background: var(--ps-helpline-bg) !important;
+}
+
+html[data-theme="light"] .ps-helpline-section {
+    background: var(--ps-helpline-bg) !important;
+}
+
+/* Force dark text on mint background in both themes */
+.ps-helpline-card,
+html[data-theme="dark"] .ps-helpline-card,
+html[data-theme="light"] .ps-helpline-card {
+    color: #1a1a1a !important;
+    padding: 72px 0 !important;
+}
+
+/* Ensure WordPress group inside helpline doesn't add extra padding */
+.ps-helpline-section .wp-block-group {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+.ps-helpline-card__title,
+html[data-theme="dark"] .ps-helpline-card__title,
+html[data-theme="light"] .ps-helpline-card__title {
+    color: #1a1a1a !important;
+}
+
+.ps-helpline-card__text,
+html[data-theme="dark"] .ps-helpline-card__text,
+html[data-theme="light"] .ps-helpline-card__text {
+    color: #1a1a1a !important;
+    font-size: 18px !important;
+    font-weight: 400 !important;
+}
+
+/* Hide external link icon and emoji images - all variants */
+.ps-helpline-card__cta .external-link-icon,
+.ps-helpline-card__cta svg,
+.ps-helpline-card__cta img,
+.ps-helpline-card__cta img.emoji,
+.ps-helpline-card__cta::after,
+a.ps-helpline-card__cta .external-link-icon,
+a.ps-helpline-card__cta svg,
+a.ps-helpline-card__cta img,
+a.ps-helpline-card__cta img.emoji,
+a[target="_blank"].ps-helpline-card__cta .external-link-icon,
+a[target="_blank"].ps-helpline-card__cta svg,
+a[target="_blank"].ps-helpline-card__cta img,
+a[target="_blank"].ps-helpline-card__cta img.emoji {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    opacity: 0 !important;
+}
+
+/* Force grid layout on helpline card */
+.ps-helpline-card {
+    display: grid !important;
+    grid-template-columns: 1fr 600px !important;
+    gap: 48px !important;
+}
+
+/* Force helpline visual image size */
+.ps-helpline-card__visual img {
+    width: 600px !important;
+    max-width: 600px !important;
+    min-width: 600px !important;
+    height: auto !important;
+}
+
+.ps-helpline-card__visual {
+    width: 600px !important;
+    max-width: 600px !important;
+    min-width: 600px !important;
+}
+
+/* Desktop only - ensure grid layout */
+@media (min-width: 769px) {
+    .ps-helpline-card {
+        display: grid !important;
+        grid-template-columns: 1fr 600px !important;
+    }
+}
+
+/* Mobile - make image responsive */
+@media (max-width: 768px) {
+    .ps-helpline-card {
+        grid-template-columns: 1fr !important;
+    }
+
+    .ps-helpline-card__visual {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .ps-helpline-card__visual img {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
 }
