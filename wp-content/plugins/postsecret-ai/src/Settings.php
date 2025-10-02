@@ -16,9 +16,22 @@ class Settings
             ['type' => 'array', 'sanitize_callback' => [self::class, 'sanitizeAll']]
         );
 
-        // Create sections in logical order
+        // Render sections in a fixed, logical order (Qdrant directly below OpenAI)
         $sections = Schema::sections();
-        foreach (['api', 'model', 'moderation', 'http', 'logging', 'encoding', 'ingest', 'paths'] as $sid) {
+        $order = [
+            'api',
+            'qdrant',      // ← new: show right after OpenAI
+            'model',
+            'moderation',
+            'http',
+            'logging',
+            'encoding',
+            'ingest',
+            'paths',
+            'search',      // ← include Vector Search tuning section
+        ];
+
+        foreach ($order as $sid) {
             if (!isset($sections[$sid])) continue;
             add_settings_section(
                 'psai_' . $sid,
@@ -57,7 +70,14 @@ class Settings
         foreach (Schema::get() as $spec) {
             $k = $spec['key'];
             $v = $input[$k] ?? $defs[$k];
-            $out[$k] = self::sanitizeOne($spec, $v);
+            $val = self::sanitizeOne($spec, $v);
+
+            // Small normalization for known keys
+            if ($k === 'QDRANT_URL' && is_string($val)) {
+                $val = rtrim($val, "/ \t\n\r\0\x0B"); // trim trailing slash/space
+            }
+
+            $out[$k] = $val;
         }
 
         // --- Minimal validation & user feedback ---
@@ -71,7 +91,20 @@ class Settings
             add_settings_error('postsecret-ai', 'psai_model_bad', 'Model Name must be a string.', 'error');
         }
 
-        // You could block saving by returning the old value when critical errors occur.
+        // Qdrant-specific sanity checks (only when enabled)
+        if (!empty($out['QDRANT_ENABLE'])) {
+            if (empty($out['QDRANT_URL'])) {
+                add_settings_error('postsecret-ai', 'psai_qdrant_url_missing', 'Qdrant is enabled but URL is empty. Set QDRANT URL or disable Qdrant.', 'error');
+            } elseif (!preg_match('#^https?://#i', (string)$out['QDRANT_URL'])) {
+                add_settings_error('postsecret-ai', 'psai_qdrant_url_scheme', 'Qdrant URL should start with http:// or https://', 'error');
+            }
+
+            if (empty($out['QDRANT_VECTOR_SIZE']) || (int)$out['QDRANT_VECTOR_SIZE'] <= 0) {
+                add_settings_error('postsecret-ai', 'psai_qdrant_dim', 'Vector Size must be a positive integer (e.g., 1536).', 'error');
+            }
+        }
+
+        // You could block saving by returning the old value on critical errors.
         // For now we still save, but show errors/warnings.
         return $out;
     }
@@ -92,24 +125,30 @@ class Settings
             case 'bool':
                 $val = (bool)$v;
                 break;
+
             case 'int':
                 $val = is_numeric($v) ? (int)$v : (int)($spec['default'] ?? 0);
                 break;
+
             case 'float':
                 $val = is_numeric($v) ? (float)$v : (float)($spec['default'] ?? 0.0);
                 break;
+
             case 'choice':
                 $choices = $spec['choices'] ?? [];
                 $val = in_array($v, $choices, true) ? $v : ($spec['default'] ?? ($choices[0] ?? ''));
                 break;
+
             case 'path':
             case 'str':
             default:
                 $val = is_string($v) ? trim($v) : '';
                 break;
         }
+
         if (isset($spec['min']) && is_numeric($spec['min']) && is_numeric($val)) $val = max($val, $spec['min']);
         if (isset($spec['max']) && is_numeric($spec['max']) && is_numeric($val)) $val = min($val, $spec['max']);
+
         return $val;
     }
 
@@ -151,7 +190,7 @@ class Settings
             case 'path':
                 echo '<input type="text" name="' . $name . '" value="' . esc_attr($cur) . '" style="width:420px" />';
                 $hint = !empty($spec['path_kind']) ? ' (' . $spec['path_kind'] . ')' : '';
-                echo '<p class="description">Path' . $hint . '. ' . $spec['help'] . '</p>';
+                echo '<p class="description">Path' . $hint . '. ' . esc_html($spec['help'] ?? '') . '</p>';
                 break;
 
             case 'str':

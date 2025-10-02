@@ -1,96 +1,79 @@
 <?php
 declare(strict_types=1);
 
-/**
- * QdrantSearchService
- * -----------------------------------------------------------------------------
- * Purpose:
- *  - Perform KNN similarity queries against Qdrant for a given Secret.
- *  - Gracefully degrade to MySQL brute-force cosine similarity when Qdrant is unavailable.
- *
- * Key decisions:
- *  - Uses proper Qdrant filter schema:
- *      * payload constraints via "must" (match) and "should" (OR across arrays)
- *      * excludes the source point via "must_not" + has_id
- *  - Over-fetches a few results ("top") then trims to allow client-side score thresholding.
- *  - Adds small extension hooks (filters) so callers can adjust collection name, query params, etc.
- *  - Defensive parsing and logging without throwing fatals inside WordPress.
- *
- * External behavior:
- *  - Public method signatures preserved from original.
- *  - Returns `null` only when Qdrant base URL is not configured / remote fails hard.
- *
- * @package PostSecret\Search
- */
-
 namespace PSSearch;
 
-if (!defined('ABSPATH')) {
-    exit;
-}
+use PSAI\Settings;
+
+if (!defined('ABSPATH')) exit;
 
 final class QdrantSearchService
 {
-    /** HTTP defaults and UA. */
-    private const HTTP_TIMEOUT_QDRANT = 10;
+    /** UA + sane defaults (overridden by Settings where present). */
     private const HTTP_USER_AGENT = 'PostSecret-QdrantSearchService/1.0 (+WordPress)';
+    private const HTTP_TIMEOUT_QDRANT_DEFAULT = 10;   // seconds
+    private const ANN_HNSW_EF_DEFAULT = 96;
+    private const ANN_TOP_K_DEFAULT = 24;
+    private const ANN_MIN_SCORE_DEFAULT = 0.55;
 
-    /** Env/constant keys for Qdrant. */
+    /** Env/constant keys for legacy fallback. */
     private const OPT_QDRANT_URL = 'PS_QDRANT_URL';
-    private const OPT_QDRANT_API_KEY = 'PS_QDRANT_API_KEY'; // optional
+    private const OPT_QDRANT_API_KEY = 'PS_QDRANT_API_KEY';
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Public API
+    // ─────────────────────────────────────────────────────────────────────────────
 
     /**
      * Find similar secrets using Qdrant vector search.
      *
-     * @param int $secret_id Source secret.
-     * @param int $limit Max results to return (trimmed after fetch).
-     * @param float $min_score Minimum similarity score (0..1).
-     * @param array $filters Optional payload filters, e.g. ['status' => 'public', 'topics' => ['grief','family']].
-     * @return array<int,array{secret_id:int,similarity:float}>|null
+     * Returns null only when Qdrant is disabled/not configured or hard-fails;
+     * callers should then use MySQL fallback.
      */
     public static function find_similar(int $secret_id, int $limit = 10, float $min_score = 0.5, array $filters = []): ?array
     {
-        $base = self::qdrant_url();
-        if ($base === null) {
-            return null; // Qdrant not configured
+        if (!self::qdrant_enabled()) {
+            return null;
         }
 
-        // Fetch canonical embedding from MySQL.
+        $base = self::qdrant_url();
+        if ($base === null) {
+            return null; // not configured
+        }
+
         $src = self::get_embedding($secret_id);
         if (!$src || empty($src['embedding']) || !is_array($src['embedding'])) {
             return [];
         }
 
+        // If caller kept library defaults, honor tuned Settings.
+        if ($limit === 10) {
+            $limit = (int)self::opt('ANN_TOP_K', self::ANN_TOP_K_DEFAULT);
+        }
+        if (abs($min_score - 0.5) < 1e-9) {
+            $min_score = (float)self::opt('ANN_MIN_SCORE', self::ANN_MIN_SCORE_DEFAULT);
+        }
+
         $collection = self::qdrant_collection((string)$src['model_version']);
-
-        // Build Qdrant filter: translate simple associative array -> Qdrant "must/should" predicates.
         $filter = self::build_qdrant_filter($filters, $secret_id);
-
-        // Slightly over-fetch to allow trimming after thresholding.
-        $top = max(1, (int)$limit + 3);
+        $top = max(1, (int)$limit + 3); // over-fetch a bit
         $scoreThreshold = max(0.0, min(1.0, (float)$min_score));
+        $hnswEf = (int)self::opt('ANN_HNSW_EF', self::ANN_HNSW_EF_DEFAULT);
 
         $body = [
             'vector' => array_values(array_map(static fn($v) => (float)$v, (array)$src['embedding'])),
             'top' => $top,
             'filter' => $filter,
-            'params' => ['hnsw_ef' => 96], // Balanced recall/latency during development.
+            'params' => ['hnsw_ef' => $hnswEf],
             'score_threshold' => $scoreThreshold,
         ];
 
-        /**
-         * Allow callers to adjust raw Qdrant search body before the request.
-         *
-         * @param array $body
-         * @param string $collection
-         * @param int $secret_id
-         */
+        /** @var array $body */
         $body = apply_filters('psai/qdrant/search_body', $body, $collection, $secret_id);
 
-        $res = self::qdrant_request('POST', "/collections/{$collection}/points/search", $body, self::HTTP_TIMEOUT_QDRANT);
+        $res = self::qdrant_request('POST', "/collections/{$collection}/points/search", $body, self::qdrant_timeout_seconds());
         if (!$res || ($res['status'] ?? '') !== 'ok') {
-            // If Qdrant is configured but failing, treat as unavailable to allow caller fallback.
-            return null;
+            return null; // treat as unavailable; let caller fallback
         }
 
         $hits = $res['result'] ?? [];
@@ -101,62 +84,57 @@ final class QdrantSearchService
         $out = [];
         foreach ($hits as $h) {
             $id = isset($h['id']) ? (int)$h['id'] : 0;
-            if ($id <= 0 || $id === $secret_id) {
-                continue;
-            }
+            if ($id <= 0 || $id === $secret_id) continue;
+
             $score = (float)($h['score'] ?? 0.0);
-            if ($score < $scoreThreshold) {
-                continue;
-            }
-            $out[] = [
-                'secret_id' => $id,
-                'similarity' => (float)round($score, 4),
-            ];
-            if (count($out) >= $limit) {
-                break;
-            }
+            if ($score < $scoreThreshold) continue;
+
+            $out[] = ['secret_id' => $id, 'similarity' => (float)round($score, 4)];
+            if (count($out) >= $limit) break;
         }
 
         return $out;
     }
 
     /**
-     * Search by embedding vector directly (for query embeddings).
-     *
-     * @param array<int,float> $vector Query embedding vector.
-     * @param string $model Model version (for collection selection).
-     * @param int $limit Max results to return.
-     * @param float $min_score Minimum similarity score (0..1).
-     * @param array $filters Optional payload filters.
-     * @return array<int,array{secret_id:int,similarity:float}>|null
+     * Search by query embedding vector directly.
      */
     public static function search_by_vector(array $vector, string $model, int $limit = 10, float $min_score = 0.5, array $filters = []): ?array
     {
+        if (!self::qdrant_enabled()) {
+            return null;
+        }
+
         $base = self::qdrant_url();
         if ($base === null) {
             return null;
         }
 
+        if ($limit === 10) {
+            $limit = (int)self::opt('ANN_TOP_K', self::ANN_TOP_K_DEFAULT);
+        }
+        if (abs($min_score - 0.5) < 1e-9) {
+            $min_score = (float)self::opt('ANN_MIN_SCORE', self::ANN_MIN_SCORE_DEFAULT);
+        }
+
         $collection = self::qdrant_collection($model);
-
-        // Build filter (no need to exclude source since this is a fresh query)
         $filter = self::build_qdrant_filter_query($filters);
-
         $top = max(1, (int)$limit + 3);
         $scoreThreshold = max(0.0, min(1.0, (float)$min_score));
+        $hnswEf = (int)self::opt('ANN_HNSW_EF', self::ANN_HNSW_EF_DEFAULT);
 
         $body = [
             'vector' => array_values(array_map(static fn($v) => (float)$v, $vector)),
             'top' => $top,
             'filter' => $filter,
-            'params' => ['hnsw_ef' => 96],
+            'params' => ['hnsw_ef' => $hnswEf],
             'score_threshold' => $scoreThreshold,
         ];
 
         /** @var array $body */
         $body = apply_filters('psai/qdrant/query_search_body', $body, $collection);
 
-        $res = self::qdrant_request('POST', "/collections/{$collection}/points/search", $body, self::HTTP_TIMEOUT_QDRANT);
+        $res = self::qdrant_request('POST', "/collections/{$collection}/points/search", $body, self::qdrant_timeout_seconds());
         if (!$res || ($res['status'] ?? '') !== 'ok') {
             return null;
         }
@@ -169,32 +147,20 @@ final class QdrantSearchService
         $out = [];
         foreach ($hits as $h) {
             $id = isset($h['id']) ? (int)$h['id'] : 0;
-            if ($id <= 0) {
-                continue;
-            }
+            if ($id <= 0) continue;
+
             $score = (float)($h['score'] ?? 0.0);
-            if ($score < $scoreThreshold) {
-                continue;
-            }
-            $out[] = [
-                'secret_id' => $id,
-                'similarity' => (float)round($score, 4),
-            ];
-            if (count($out) >= $limit) {
-                break;
-            }
+            if ($score < $scoreThreshold) continue;
+
+            $out[] = ['secret_id' => $id, 'similarity' => (float)round($score, 4)];
+            if (count($out) >= $limit) break;
         }
 
         return $out;
     }
 
     /**
-     * MySQL fallback for similarity search (brute-force cosine).
-     *
-     * @param int $secret_id
-     * @param int $limit
-     * @param float $min_similarity
-     * @return array<int,array{secret_id:int,similarity:float}>
+     * MySQL brute-force fallback (kept as-is).
      */
     public static function find_similar_mysql(int $secret_id, int $limit, float $min_similarity): array
     {
@@ -208,7 +174,6 @@ final class QdrantSearchService
         $table = $wpdb->prefix . 'ps_text_embeddings';
         $model = (string)$source['model_version'];
 
-        // Same-model comparisons only; exclude self.
         $rows = $wpdb->get_results(
             $wpdb->prepare(
                 "SELECT secret_id, embedding FROM {$table} WHERE secret_id != %d AND model_version = %s",
@@ -217,10 +182,7 @@ final class QdrantSearchService
             ),
             ARRAY_A
         );
-
-        if (!is_array($rows) || $rows === []) {
-            return [];
-        }
+        if (!is_array($rows) || $rows === []) return [];
 
         /** @var array<int,float> $src */
         $src = array_map(static fn($v) => (float)$v, (array)$source['embedding']);
@@ -228,18 +190,14 @@ final class QdrantSearchService
         $res = [];
         foreach ($rows as $row) {
             $vecRaw = json_decode((string)($row['embedding'] ?? '[]'), true);
-            if (!is_array($vecRaw)) {
-                continue;
-            }
+            if (!is_array($vecRaw)) continue;
+
             /** @var array<int,float> $vec */
             $vec = array_map(static fn($v) => (float)$v, $vecRaw);
 
             $sim = self::cosine_similarity($src, $vec);
             if ($sim >= $min_similarity) {
-                $res[] = [
-                    'secret_id' => (int)$row['secret_id'],
-                    'similarity' => (float)round($sim, 4),
-                ];
+                $res[] = ['secret_id' => (int)$row['secret_id'], 'similarity' => (float)round($sim, 4)];
             }
         }
 
@@ -247,67 +205,67 @@ final class QdrantSearchService
         return array_slice($res, 0, max(0, (int)$limit));
     }
 
-    // === Internal Helpers ===================================================
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Internal helpers
+    // ─────────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Fetch canonical embedding record for a Secret.
-     *
-     * @param int $secret_id
-     * @return array<string,mixed>|null
-     */
-    private static function get_embedding(int $secret_id): ?array
+    /** Is Qdrant turned on in Settings? */
+    private static function qdrant_enabled(): bool
     {
-        global $wpdb;
-        $table = $wpdb->prefix . 'ps_text_embeddings';
+        return (bool)self::opt('QDRANT_ENABLE', true);
+    }
 
-        /** @var array<string,mixed>|null $row */
-        $row = $wpdb->get_row(
-            $wpdb->prepare("SELECT * FROM {$table} WHERE secret_id = %d", $secret_id),
-            ARRAY_A
-        );
-
-        if (!$row) {
-            return null;
+    /** Base URL: Settings first, then env/const. */
+    private static function qdrant_url(): ?string
+    {
+        $url = (string)self::opt('QDRANT_URL', '');
+        if ($url === '') {
+            $url = getenv(self::OPT_QDRANT_URL) ?: (defined(self::OPT_QDRANT_URL) ? constant(self::OPT_QDRANT_URL) : '');
         }
+        return is_string($url) && $url !== '' ? rtrim($url, '/') : null;
+    }
 
-        $decoded = json_decode((string)($row['embedding'] ?? '[]'), true);
-        $row['embedding'] = is_array($decoded) ? $decoded : [];
+    /** API key: Settings first, then env/const. */
+    private static function qdrant_api_key(): ?string
+    {
+        $key = (string)self::opt('QDRANT_API_KEY', '');
+        if ($key === '') {
+            $key = getenv(self::OPT_QDRANT_API_KEY) ?: (defined(self::OPT_QDRANT_API_KEY) ? constant(self::OPT_QDRANT_API_KEY) : '');
+        }
+        return is_string($key) && $key !== '' ? $key : null;
+    }
 
-        return $row;
+    /** Collection: prefer configured `QDRANT_COLLECTION`, else per-model. */
+    private static function qdrant_collection(string $model): string
+    {
+        $configured = (string)self::opt('QDRANT_COLLECTION', '');
+        if ($configured !== '') return $configured;
+
+        $name = 'secrets_' . preg_replace('/[^a-z0-9]+/i', '_', $model);
+        /** @var string $name */
+        $name = apply_filters('psai/qdrant/collection', $name, $model);
+        return $name;
+    }
+
+    /** Qdrant timeout seconds from Settings. */
+    private static function qdrant_timeout_seconds(): int
+    {
+        return (int)self::opt('ANN_TIMEOUT_SECONDS', self::HTTP_TIMEOUT_QDRANT_DEFAULT);
     }
 
     /**
-     * Build a Qdrant filter object from simple associative filters.
-     *
-     * Supports:
-     *  - Scalar equality: ['status' => 'public'] => must match
-     *  - Array "OR":     ['topics' => ['grief','family']] => should of matches on the same key
-     * Also excludes the source vector by id.
-     *
-     * @param array<string,mixed> $filters
-     * @param int $excludeId
-     * @return array<string,mixed>|null
+     * Build Qdrant filter from simple associative array and exclude source ID.
      */
     private static function build_qdrant_filter(array $filters, int $excludeId): ?array
     {
         $filter = self::build_qdrant_filter_query($filters);
-
-        // Exclude the source point.
-        if ($filter === null) {
-            $filter = [];
-        }
-        $filter['must_not'] = [
-            ['has_id' => ['values' => [$excludeId]]],
-        ];
-
+        if ($filter === null) $filter = [];
+        $filter['must_not'] = [['has_id' => ['values' => [$excludeId]]]];
         return $filter === [] ? null : $filter;
     }
 
     /**
-     * Build a Qdrant filter object for queries (no exclusion).
-     *
-     * @param array<string,mixed> $filters
-     * @return array<string,mixed>|null
+     * Build Qdrant filter for queries (no exclusion).
      */
     private static function build_qdrant_filter_query(array $filters): ?array
     {
@@ -315,20 +273,15 @@ final class QdrantSearchService
         $should = [];
 
         foreach ($filters as $key => $value) {
-            if ($value === null || $value === '') {
-                continue;
-            }
+            if ($value === null || $value === '') continue;
+
             if (is_array($value)) {
-                // OR semantics across provided values for the same key.
-                $value = array_values(array_filter($value, static fn($v) => $v !== null && $v !== ''));
-                if ($value === []) {
-                    continue;
-                }
+                $vals = array_values(array_filter($value, static fn($v) => $v !== null && $v !== ''));
+                if ($vals === []) continue;
                 $shouldMatches = array_map(
                     static fn($vv) => ['key' => $key, 'match' => ['value' => $vv]],
-                    $value
+                    $vals
                 );
-                // Group into a single should clause; Qdrant treats multiple should as OR.
                 $should = array_merge($should, $shouldMatches);
             } else {
                 $must[] = ['key' => $key, 'match' => ['value' => $value]];
@@ -336,67 +289,19 @@ final class QdrantSearchService
         }
 
         $filter = [];
-        if ($must !== []) {
-            $filter['must'] = $must;
-        }
-        if ($should !== []) {
-            $filter['should'] = $should;
-        }
+        if ($must !== []) $filter['must'] = $must;
+        if ($should !== []) $filter['should'] = $should;
 
         return $filter === [] ? null : $filter;
     }
 
     /**
-     * Resolve Qdrant base URL from env/constant.
-     *
-     * @return string|null
+     * Minimal Qdrant HTTP wrapper with optional api-key header.
      */
-    private static function qdrant_url(): ?string
-    {
-        $url = getenv(self::OPT_QDRANT_URL) ?: (defined(self::OPT_QDRANT_URL) ? constant(self::OPT_QDRANT_URL) : null);
-        return is_string($url) && $url !== '' ? rtrim($url, '/') : null;
-    }
-
-    /**
-     * Optional Qdrant API key (if instance enforces auth).
-     *
-     * @return string|null
-     */
-    private static function qdrant_api_key(): ?string
-    {
-        $key = getenv(self::OPT_QDRANT_API_KEY) ?: (defined(self::OPT_QDRANT_API_KEY) ? constant(self::OPT_QDRANT_API_KEY) : null);
-        return is_string($key) && $key !== '' ? $key : null;
-    }
-
-    /**
-     * Derive per-model collection name (sanitized).
-     *
-     * @param string $model
-     * @return string
-     */
-    private static function qdrant_collection(string $model): string
-    {
-        $name = 'secrets_' . preg_replace('/[^a-z0-9]+/i', '_', $model);
-        /** @var string $name */
-        $name = apply_filters('psai/qdrant/collection', $name, $model);
-        return $name;
-    }
-
-    /**
-     * Minimal Qdrant HTTP client wrapper with optional API key header.
-     *
-     * @param string $method
-     * @param string $path
-     * @param array<string,mixed>|null $body
-     * @param int $timeout
-     * @return array<string,mixed>|null
-     */
-    private static function qdrant_request(string $method, string $path, ?array $body = null, int $timeout = self::HTTP_TIMEOUT_QDRANT): ?array
+    private static function qdrant_request(string $method, string $path, ?array $body = null, int $timeout = null): ?array
     {
         $base = self::qdrant_url();
-        if ($base === null) {
-            return null;
-        }
+        if ($base === null) return null;
 
         $headers = [
             'Content-Type' => 'application/json',
@@ -411,7 +316,7 @@ final class QdrantSearchService
         $args = [
             'method' => $method,
             'headers' => $headers,
-            'timeout' => $timeout,
+            'timeout' => $timeout ?? self::qdrant_timeout_seconds(),
         ];
 
         if ($body !== null) {
@@ -439,23 +344,34 @@ final class QdrantSearchService
     }
 
     /**
-     * Cosine similarity between two equal-length vectors.
-     *
-     * @param array<int,float> $a
-     * @param array<int,float> $b
-     * @return float
+     * Fetch canonical embedding record for a Secret.
      */
+    private static function get_embedding(int $secret_id): ?array
+    {
+        global $wpdb;
+        $table = $wpdb->prefix . 'ps_text_embeddings';
+
+        /** @var array<string,mixed>|null $row */
+        $row = $wpdb->get_row(
+            $wpdb->prepare("SELECT * FROM {$table} WHERE secret_id = %d", $secret_id),
+            ARRAY_A
+        );
+        if (!$row) return null;
+
+        $decoded = json_decode((string)($row['embedding'] ?? '[]'), true);
+        $row['embedding'] = is_array($decoded) ? $decoded : [];
+        return $row;
+    }
+
+    /** Cosine similarity (for MySQL fallback). */
     private static function cosine_similarity(array $a, array $b): float
     {
         $na = count($a);
-        if ($na === 0 || $na !== count($b)) {
-            return 0.0;
-        }
+        if ($na === 0 || $na !== count($b)) return 0.0;
 
         $dot = 0.0;
         $ma = 0.0;
         $mb = 0.0;
-
         for ($i = 0; $i < $na; $i++) {
             $ai = (float)$a[$i];
             $bi = (float)$b[$i];
@@ -463,11 +379,28 @@ final class QdrantSearchService
             $ma += $ai * $ai;
             $mb += $bi * $bi;
         }
-
-        if ($ma <= 0.0 || $mb <= 0.0) {
-            return 0.0;
-        }
-
+        if ($ma <= 0.0 || $mb <= 0.0) return 0.0;
         return $dot / (sqrt($ma) * sqrt($mb));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Settings helper
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Read a setting from the single-array option, with a default.
+     * (Intentionally duplicated here to keep the service self-contained.)
+     *
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    private static function opt(string $key, $default = null)
+    {
+        $all = get_option(Settings::OPTION, []);
+        if (is_array($all) && array_key_exists($key, $all) && $all[$key] !== '' && $all[$key] !== null) {
+            return $all[$key];
+        }
+        return $default;
     }
 }
