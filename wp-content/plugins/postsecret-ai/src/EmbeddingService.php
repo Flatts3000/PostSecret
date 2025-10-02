@@ -110,6 +110,38 @@ final class EmbeddingService
         return self::find_similar_mysql($secret_id, $limit, $min_score);
     }
 
+    /**
+     * Generate an embedding for an arbitrary query string (no DB write).
+     *
+     * @param string $query Free-text query to embed.
+     * @param string $api_key OpenAI API key. If empty, falls back to Settings::API_KEY.
+     * @param string $model Embedding model (default: text-embedding-3-small).
+     * @return array<int,float>|null  L2-normalized vector or null on failure.
+     */
+    public static function generate_query_embedding(string $query, string $api_key = '', string $model = 'text-embedding-3-small'): ?array
+    {
+        $query = trim($query);
+        if ($query === '') {
+            return null;
+        }
+
+        // Allow caller to omit the key; pull from Settings if needed.
+        if ($api_key === '') {
+            $api_key = (string)self::opt('API_KEY', '');
+            if ($api_key === '') {
+                error_log('[EmbeddingService] No API key available for generate_query_embedding().');
+                return null;
+            }
+        }
+
+        $vec = self::generate_embedding($api_key, $model, $query);
+        if ($vec === null) {
+            return null;
+        }
+
+        return self::normalize_vector($vec);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────
     // OpenAI
     // ─────────────────────────────────────────────────────────────────────────────
