@@ -34,57 +34,36 @@
                         data-light-src="/wp-content/themes/postsecret/assets/postsecret-logo-light.png"
                         data-dark-src="/wp-content/themes/postsecret/assets/postsecret-logo-dark.png"
                         alt="PostSecret"
-                        height="28"
+                        width="172"
+                        height="52"
                         loading="lazy"
                         decoding="async"
                 />
             </a>
             <nav class="ps-footer__links" aria-label="Footer navigation">
                 <a href="https://www.patreon.com/PostSecret" target="_blank">JOIN</a>
+                <button class="ps-theme-btn" data-ps-theme-toggle aria-pressed="false" aria-label="Toggle color mode">
+                    <i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i>
+                    <span class="screen-reader-text">Toggle color mode</span>
+                </button>
             </nav>
         </div>
         <!-- /wp:html -->
     </div>
     <!-- /wp:group -->
 
-    <!-- Copyright and Meta -->
-    <!-- wp:group {"layout":{"type":"constrained","contentSize":"1200px"}} -->
-    <div class="wp-block-group">
-        <!-- wp:html -->
-        <div class="ps-footer__meta">
-            <p class="ps-footer__copyright">
-                Copyright © <span class="ps-year">2025</span> · PostSecret · All rights reserved
-            </p>
-            <button class="ps-theme-btn" data-ps-theme-toggle aria-pressed="false" aria-label="Toggle color mode">
-                <i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i>
-                <span class="screen-reader-text">Toggle color mode</span>
-            </button>
-        </div>
-        <!-- /wp:html -->
-    </div>
-    <!-- /wp:group -->
-
-    <!-- Attribution Links -->
-    <!-- wp:group {"layout":{"type":"constrained","contentSize":"1200px"}} -->
-    <div class="wp-block-group">
-        <!-- wp:html -->
-        <div class="ps-footer__attribution">
-            <p class="ps-footer__links-left">
-                <a href="https://wordpress.com/wp/?partner_domain=museum.postsecret.com&utm_source=Automattic&utm_medium=colophon&utm_campaign=Concierge%20Referral&utm_term=museum.postsecret.com" target="_blank" rel="nofollow">Proudly powered by WordPress.</a> |
-                <a href="https://pressable.com/?utm_source=Automattic&utm_medium=rpc&utm_campaign=Concierge%20Referral&utm_term=concierge" target="_blank" rel="nofollow">Hosted by Pressable.</a>
-            </p>
-        </div>
-        <!-- /wp:html -->
-    </div>
-    <!-- /wp:group -->
-
-    <!-- Privacy and Collaboration -->
     <!-- wp:group {"layout":{"type":"constrained","contentSize":"1200px"}} -->
     <div class="wp-block-group">
         <!-- wp:html -->
         <div class="ps-footer__legal">
-            <p><a href="https://postsecretlive.com/privacy-policy/" target="_blank" rel="noreferrer noopener">Privacy Policy</a></p>
-            <p>In collaboration with <a href="https://firemancreative.net/" target="_blank" rel="noreferrer noopener">Fireman Creative</a></p>
+            <div>
+                <p class="ps-footer__copyright"> Copyright © <span class="ps-year">2025</span> · PostSecret · All rights reserved</p>
+                <p><a href="https://postsecretlive.com/privacy-policy/" target="_blank" rel="noreferrer noopener">Privacy Policy</a></p>
+            </div>
+            <div>
+                <p><a href="https://wordpress.com/wp/?partner_domain=museum.postsecret.com&utm_source=Automattic&utm_medium=colophon&utm_campaign=Concierge%20Referral&utm_term=museum.postsecret.com" target="_blank" rel="nofollow">Proudly powered by WordPress.</a></p>
+                <p><a href="https://github.com/Flatts3000/PostSecret">PostSecret is open source</a></p>
+            </div>
         </div>
         <!-- /wp:html -->
     </div>
@@ -98,33 +77,36 @@
             --pad: 24px;
         }
 
-        /* Patreon Section - Full width wrapper */
+        /* Patreon Section - Full width wrapper with red background */
         .ps-footer__patreon-wrapper {
-            background: var(--wp--preset--color--accent);
+            background: #EF3340;
         }
 
         .ps-footer__patreon {
             display: grid;
-            grid-template-columns: 60% 40%;
+            grid-template-columns: 1fr auto;
             gap: clamp(24px, 4vw, 48px);
             align-items: center;
-            padding: clamp(48px, 6vw, 72px) 0;
+            padding: 72px 0;
+            margin-bottom: clamp(16px, 2vw, 24px);
         }
 
         .ps-footer__patreon-heading {
-            font-size: clamp(1.5rem, 3vw, 1.75rem);
-            font-weight: 600;
+            font-size: clamp(1.75rem, 3vw, 2.25rem);
+            font-weight: 700;
             text-transform: uppercase;
             margin: 0 0 0.75rem 0;
             color: #ffffff;
+            letter-spacing: -0.01em;
+            line-height: 1.15;
         }
 
         .ps-footer__patreon-text {
-            font-size: 1.125rem;
+            font-size: clamp(1rem, 1.5vw, 1.125rem);
             line-height: 1.6;
             margin: 0;
             color: #ffffff;
-            opacity: 0.95;
+            max-width: 700px;
         }
 
         .ps-footer__patreon-cta {
@@ -139,7 +121,7 @@
             background: #000000;
             color: #ffffff;
             font-size: 0.875rem;
-            font-weight: 600;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             border-radius: 4px;
@@ -150,15 +132,17 @@
         .ps-footer__patreon-btn:hover {
             background: #1a1a1a;
             color: #ffffff;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
 
-        /* Navigation */
+        /* Navigation - Black background section */
         .ps-footer__nav {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: var(--gap);
-            padding: var(--pad) 0;
+            gap: clamp(1.5rem, 3vw, 2.5rem);
+            padding: clamp(12px, 1.5vw, 16px) 0;
         }
 
         .ps-footer__brand {
@@ -167,9 +151,14 @@
             text-decoration: none;
         }
 
+        .ps-footer__brand img {
+            width: 172px;
+            height: 52px;
+        }
+
         .ps-footer__links {
             display: flex;
-            gap: clamp(1rem, 3vw, 2rem);
+            gap: clamp(1.5rem, 3vw, 2.5rem);
             align-items: center;
         }
 
@@ -180,6 +169,7 @@
             text-decoration: none;
             color: var(--wp--preset--color--text);
             transition: color 0.2s ease;
+            letter-spacing: 0.05em;
         }
 
         .ps-footer__links a:hover {
@@ -200,10 +190,6 @@
         .ps-footer__copyright {
             margin: 0;
             opacity: 0.85;
-        }
-
-        .ps-year::before {
-            content: "2025";
         }
 
         .ps-theme-btn {
@@ -249,23 +235,39 @@
             color: var(--wp--preset--color--accent);
         }
 
-        /* Legal */
+        /* Legal - Bottom section with copyright */
         .ps-footer__legal {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            padding: clamp(32px, 5vw, 48px) 0;
+            font-size: 0.875rem;
+            border-top: 1px solid var(--wp--preset--color--border);
+        }
+
+        .ps-footer__legal > div {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0 0 var(--pad) 0;
-            font-size: 0.8rem;
-            opacity: 0.75;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .ps-footer__legal > div:last-child {
+            text-align: right;
         }
 
         .ps-footer__legal p {
             margin: 0;
+            line-height: 1.6;
+        }
+
+        .ps-footer__copyright {
+            font-weight: 400;
         }
 
         .ps-footer__legal a {
             color: var(--wp--preset--color--text);
             text-decoration: none;
+            transition: color 0.2s ease;
         }
 
         .ps-footer__legal a:hover {
@@ -305,6 +307,18 @@
             }
         }
     </style>
+    <!-- /wp:html -->
+
+    <!-- wp:html -->
+    <script>
+        // Set current year dynamically
+        document.addEventListener('DOMContentLoaded', function() {
+            const yearSpan = document.querySelector('.ps-year');
+            if (yearSpan) {
+                yearSpan.textContent = new Date().getFullYear();
+            }
+        });
+    </script>
     <!-- /wp:html -->
 
 </footer>
