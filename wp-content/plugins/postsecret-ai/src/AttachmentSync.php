@@ -7,27 +7,33 @@ if (!defined('ABSPATH')) exit;
 /**
  * Syncs AI classification into attachment fields:
  * - Alt text  -> from front/back artDescription (fallback: secretDescription)
- * - Caption   -> from tags (e.g., "#addiction #remorseful"), max 140 chars
+ * - Caption   -> from facets (topics, feelings, meanings combined as hashtags), max 140 chars
  * - Description -> from secretDescription (objective summary)
  *
  * Rules:
- * - Only fill when the field is empty (don’t overwrite manual edits).
+ * - Only fill when the field is empty (don't overwrite manual edits).
  * - Never include long transcriptions or anything when containsPII=true.
- * - Back attachment gets “Back of postcard …” phrasing.
+ * - Back attachment gets "Back of postcard …" phrasing.
  */
 final class AttachmentSync
 {
     public static function sync_from_payload(int $front_id, array $payload, ?int $back_id = null): void
     {
         $containsPII = (bool)($payload['moderation']['containsPII'] ?? false);
-        $tags = is_array($payload['tags'] ?? null) ? $payload['tags'] : [];
+
+        // Combine all facets for caption
+        $topics = is_array($payload['topics'] ?? null) ? $payload['topics'] : [];
+        $feelings = is_array($payload['feelings'] ?? null) ? $payload['feelings'] : [];
+        $meanings = is_array($payload['meanings'] ?? null) ? $payload['meanings'] : [];
+        $allFacets = array_merge($topics, $feelings, $meanings);
+
         $secretDesc = self::clean_str($payload['secretDescription'] ?? '');
 
         // FRONT
         $frontSide = $payload['front'] ?? [];
         $frontArt = self::clean_str($frontSide['artDescription'] ?? '');
         $frontAlt = $frontArt ?: $secretDesc;
-        $frontCaption = self::format_caption($tags);
+        $frontCaption = self::format_caption($allFacets);
         $frontDesc = $secretDesc;
 
         self::apply_if_empty($front_id, $frontAlt, $frontCaption, $frontDesc, 'front', $containsPII);
@@ -37,7 +43,7 @@ final class AttachmentSync
             $backSide = $payload['back'] ?? [];
             $backArt = self::clean_str($backSide['artDescription'] ?? '');
             $altBack = $backArt ?: 'Back of postcard';
-            $capBack = $frontCaption; // keep tags consistent
+            $capBack = $frontCaption; // keep facets consistent
             $descBack = $containsPII ? '' : self::clean_str($backArt); // stay minimal on back
 
             self::apply_if_empty($back_id, $altBack, $capBack, $descBack, 'back', $containsPII);
@@ -53,7 +59,7 @@ final class AttachmentSync
             update_post_meta($att_id, '_wp_attachment_image_alt', $alt);
         }
 
-        // CAPTION (tags → “#tag #tag …” up to 140 chars)
+        // CAPTION (facets → "#facet #facet …" up to 140 chars)
         $existingPost = get_post($att_id);
         $existingCap = is_object($existingPost) ? trim((string)$existingPost->post_excerpt) : '';
         if ($existingCap === '' && $caption !== '') {
@@ -71,12 +77,12 @@ final class AttachmentSync
         }
     }
 
-    private static function format_caption(array $tags): string
+    private static function format_caption(array $facets): string
     {
-        if (empty($tags)) return '';
-        // 3–5 tags is plenty for a caption
-        $tags = array_slice($tags, 0, 5);
-        $hashes = array_map(fn($t) => '#' . preg_replace('/[^a-z0-9_]/', '', strtolower((string)$t)), $tags);
+        if (empty($facets)) return '';
+        // 3–6 facets is plenty for a caption
+        $facets = array_slice($facets, 0, 6);
+        $hashes = array_map(fn($t) => '#' . preg_replace('/[^a-z0-9_]/', '', strtolower((string)$t)), $facets);
         $cap = implode(' ', $hashes);
         // keep it terse
         if (mb_strlen($cap, 'UTF-8') > 140) {

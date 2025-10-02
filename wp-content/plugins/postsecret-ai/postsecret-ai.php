@@ -13,6 +13,7 @@ require __DIR__ . '/src/Prompt.php';
 require __DIR__ . '/src/Schema.php';
 require __DIR__ . '/src/SchemaGuard.php';
 require __DIR__ . '/src/Classifier.php';
+require __DIR__ . '/src/EmbeddingService.php';
 
 // Utilities
 require __DIR__ . '/src/Metadata.php';
@@ -249,6 +250,10 @@ add_action('admin_post_psai_process_now', function () {
 
             \PSAI\psai_store_result($front_id, $payload, $model);
             \PSAI\AttachmentSync::sync_from_payload($front_id, $payload, null);
+
+            // Generate and store embedding for new classifications
+            $embed_model = $env['EMBEDDING_MODEL'] ?? 'text-embedding-3-small';
+            \PSAI\EmbeddingService::generate_and_store($front_id, $payload, $api, $embed_model);
         }
 
         // Normalize flags from the saved payload + recompute metadata
@@ -271,12 +276,69 @@ add_action('admin_post_psai_process_now', function () {
     }
 });
 
+/* -------------------------------------------------------------------------
+ * Re-classify action: Force new AI classification regardless of existing data
+ * ------------------------------------------------------------------------- */
+add_action('admin_post_psai_reclassify', function () {
+    if (!current_user_can('upload_files')) wp_die('Not allowed', 403);
+
+    $att = isset($_GET['att']) ? (int)$_GET['att'] : 0;
+    check_admin_referer('psai_reclassify_' . $att);
+    if (!$att || get_post_type($att) !== 'attachment') {
+        wp_redirect(admin_url('upload.php?psai_msg=bad_id'));
+        exit;
+    }
+
+    try {
+        // If this is the back, flip to the front as canonical
+        $maybePair = (int)get_post_meta($att, '_ps_pair_id', true);
+        $side = get_post_meta($att, '_ps_side', true);
+        $front_id = ($side === 'back' && $maybePair) ? $maybePair : $att;
+
+        // Get config
+        $env = get_option(\PSAI\Settings::OPTION, \PSAI\Settings::defaults());
+        $api = $env['API_KEY'] ?? '';
+        $model = $env['MODEL_NAME'] ?? 'gpt-4o-mini';
+        if (!$api) throw new \RuntimeException('Missing OpenAI API key.');
+
+        // Force re-classification
+        $frontSrc = \PSAI\psai_make_data_url($front_id);
+        $payload = \PSAI\Classifier::classify($api, $model, $frontSrc, null);
+        $payload = \PSAI\SchemaGuard::normalize($payload);
+
+        \PSAI\psai_store_result($front_id, $payload, $model);
+        \PSAI\AttachmentSync::sync_from_payload($front_id, $payload, null);
+
+        // Generate and store embedding
+        $embed_model = $env['EMBEDDING_MODEL'] ?? 'text-embedding-3-small';
+        \PSAI\EmbeddingService::generate_and_store($front_id, $payload, $api, $embed_model);
+
+        // Normalize flags + recompute metadata
+        \PSAI\Ingress::normalize_from_existing_payload($front_id);
+        \PSAI\Metadata::compute_and_store($att);
+
+        delete_post_meta($front_id, '_ps_last_error');
+
+        $url = add_query_arg(['psai_msg' => 'reclassified'], get_edit_post_link($att, ''));
+        wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=reclassified'));
+        exit;
+
+    } catch (\Throwable $e) {
+        update_post_meta($att, '_ps_last_error', substr($e->getMessage(), 0, 500));
+        $url = add_query_arg(['psai_msg' => 'err'], get_edit_post_link($att, ''));
+        wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=err'));
+        exit;
+    }
+});
+
 /* Small admin notice so you know the button worked */
 add_action('admin_notices', function () {
     if (!is_admin() || !isset($_GET['psai_msg'])) return;
     $msg = sanitize_text_field($_GET['psai_msg']);
     if ($msg === 'ok') {
         echo '<div class="notice notice-success is-dismissible"><p>PostSecret AI: Attachment normalized.</p></div>';
+    } elseif ($msg === 'reclassified') {
+        echo '<div class="notice notice-success is-dismissible"><p>PostSecret AI: Attachment re-classified with latest AI model and prompt.</p></div>';
     } elseif ($msg === 'err') {
         echo '<div class="notice notice-error is-dismissible"><p>PostSecret AI: There was an error. See the meta box for details.</p></div>';
     } elseif ($msg === 'bad_id') {

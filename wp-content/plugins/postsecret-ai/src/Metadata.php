@@ -48,6 +48,7 @@ final class Metadata
     /**
      * Returns [primary_hex, palette_hexes[]].
      * Tries Imagick (fast, accurate) then GD (portable). Falls back to white.
+     * Filters palette to ensure minimum perceptual distance between colors.
      */
     private static function palette_hexes(string $path, int $k = 5): array
     {
@@ -66,8 +67,9 @@ final class Metadata
                     $counts[$hex] = ($counts[$hex] ?? 0) + 1;
                 }
                 arsort($counts);
-                $hexes = array_slice(array_keys($counts), 0, max(1, $k));
-                return [$hexes[0] ?? '#ffffff', $hexes];
+                $hexes = array_keys($counts);
+                $filtered = self::filter_similar_colors($hexes, $k);
+                return [$filtered[0] ?? '#ffffff', $filtered];
             } catch (\Throwable $e) { /* fall through */
             }
         }
@@ -113,8 +115,9 @@ final class Metadata
                     imagedestroy($src);
                     if ($counts) {
                         arsort($counts);
-                        $hexes = array_slice(array_keys($counts), 0, max(1, $k));
-                        return [$hexes[0], $hexes];
+                        $hexes = array_keys($counts);
+                        $filtered = self::filter_similar_colors($hexes, $k);
+                        return [$filtered[0], $filtered];
                     }
                 }
             }
@@ -122,6 +125,119 @@ final class Metadata
 
         // last resort
         return ['#ffffff', ['#ffffff']];
+    }
+
+    /**
+     * Filter palette to ensure minimum perceptual distance between colors.
+     * Uses Delta-E (CIE76) in LAB color space for perceptual accuracy.
+     *
+     * @param array $hexes   Array of hex colors (sorted by frequency)
+     * @param int   $k       Maximum colors to return
+     * @param float $min_distance Minimum Delta-E distance (default: 20)
+     * @return array Filtered hex colors
+     */
+    private static function filter_similar_colors(array $hexes, int $k = 5, float $min_distance = 20.0): array
+    {
+        if (empty($hexes)) return [];
+
+        $filtered = [];
+        $filtered[] = $hexes[0]; // Always keep the primary color
+
+        foreach ($hexes as $hex) {
+            if (count($filtered) >= $k) break;
+
+            // Check distance to all already-selected colors
+            $too_close = false;
+            foreach ($filtered as $existing) {
+                $distance = self::color_distance($hex, $existing);
+                if ($distance < $min_distance) {
+                    $too_close = true;
+                    break;
+                }
+            }
+
+            if (!$too_close) {
+                $filtered[] = $hex;
+            }
+        }
+
+        return $filtered;
+    }
+
+    /**
+     * Calculate perceptual color distance using Delta-E (CIE76) in LAB space.
+     * Simplified implementation for performance.
+     *
+     * @param string $hex1 First hex color
+     * @param string $hex2 Second hex color
+     * @return float Distance (0-100+, typically 0-50 for similar colors)
+     */
+    private static function color_distance(string $hex1, string $hex2): float
+    {
+        $rgb1 = self::hex_to_rgb($hex1);
+        $rgb2 = self::hex_to_rgb($hex2);
+
+        // Convert RGB to LAB (simplified)
+        $lab1 = self::rgb_to_lab($rgb1);
+        $lab2 = self::rgb_to_lab($rgb2);
+
+        // Delta-E (CIE76) = sqrt((L2-L1)^2 + (a2-a1)^2 + (b2-b1)^2)
+        $dL = $lab2[0] - $lab1[0];
+        $da = $lab2[1] - $lab1[1];
+        $db = $lab2[2] - $lab1[2];
+
+        return sqrt($dL * $dL + $da * $da + $db * $db);
+    }
+
+    /**
+     * Convert hex to RGB array.
+     */
+    private static function hex_to_rgb(string $hex): array
+    {
+        $hex = ltrim($hex, '#');
+        return [
+            hexdec(substr($hex, 0, 2)),
+            hexdec(substr($hex, 2, 2)),
+            hexdec(substr($hex, 4, 2)),
+        ];
+    }
+
+    /**
+     * Convert RGB to LAB color space (simplified).
+     * Full conversion: RGB -> XYZ -> LAB
+     */
+    private static function rgb_to_lab(array $rgb): array
+    {
+        // Normalize RGB to 0-1
+        $r = $rgb[0] / 255.0;
+        $g = $rgb[1] / 255.0;
+        $b = $rgb[2] / 255.0;
+
+        // Apply gamma correction
+        $r = ($r > 0.04045) ? pow(($r + 0.055) / 1.055, 2.4) : $r / 12.92;
+        $g = ($g > 0.04045) ? pow(($g + 0.055) / 1.055, 2.4) : $g / 12.92;
+        $b = ($b > 0.04045) ? pow(($b + 0.055) / 1.055, 2.4) : $b / 12.92;
+
+        // Convert to XYZ (D65 illuminant)
+        $x = $r * 0.4124564 + $g * 0.3575761 + $b * 0.1804375;
+        $y = $r * 0.2126729 + $g * 0.7151522 + $b * 0.0721750;
+        $z = $r * 0.0193339 + $g * 0.1191920 + $b * 0.9503041;
+
+        // Normalize for D65 white point
+        $x = $x / 0.95047;
+        $y = $y / 1.00000;
+        $z = $z / 1.08883;
+
+        // Convert to LAB
+        $fx = ($x > 0.008856) ? pow($x, 1/3) : (7.787 * $x + 16/116);
+        $fy = ($y > 0.008856) ? pow($y, 1/3) : (7.787 * $y + 16/116);
+        $fz = ($z > 0.008856) ? pow($z, 1/3) : (7.787 * $z + 16/116);
+
+        $L = 116 * $fy - 16;
+        $a = 500 * ($fx - $fy);
+        $b = 200 * ($fy - $fz);
+
+        return [$L, $a, $b];
     }
 
     private static function rgb_hex(int $r, int $g, int $b): string

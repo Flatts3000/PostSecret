@@ -23,6 +23,32 @@
         <?php the_excerpt(); ?>
     </div>
     <footer class="secret-footer">
-        <?php the_tags( '<span class="tag-links">', ', ', '</span>' ); ?>
+        <?php
+        // Display facets (topics, feelings, meanings)
+        $topics = get_post_meta( get_the_ID(), '_ps_topics', true );
+        $feelings = get_post_meta( get_the_ID(), '_ps_feelings', true );
+        $meanings = get_post_meta( get_the_ID(), '_ps_meanings', true );
+
+        $all_facets = array_merge(
+            is_array( $topics ) ? $topics : [],
+            is_array( $feelings ) ? $feelings : [],
+            is_array( $meanings ) ? $meanings : []
+        );
+
+        if ( ! empty( $all_facets ) ) :
+            echo '<span class="facet-links">';
+            $facet_links = array_map(
+                function( $facet ) {
+                    return '<span class="facet">' . esc_html( $facet ) . '</span>';
+                },
+                array_slice( $all_facets, 0, 3 ) // Show first 3
+            );
+            echo implode( ', ', $facet_links );
+            if ( count( $all_facets ) > 3 ) {
+                echo ' <span class="facet-more">+' . ( count( $all_facets ) - 3 ) . '</span>';
+            }
+            echo '</span>';
+        endif;
+        ?>
     </footer>
 </article>

@@ -38,13 +38,16 @@ final class SchemaGuard
     private const DEF_SIDE = [
         'artDescription' => '',
         'fontDescription' => ['style' => 'unknown', 'notes' => ''],
-        'text' => ['fullText' => null, 'language' => 'unknown', 'handwriting' => false],
+        'text' => ['fullText' => null, 'language' => 'unknown'],
     ];
 
     /** Full defaults shape */
     private const DEF_PAYLOAD = [
-        'tags' => [],
+        'topics' => [],
+        'feelings' => [],
+        'meanings' => [],
         'secretDescription' => '',
+        'teachesWisdom' => false,
         'media' => [
             'type' => 'unknown',
             'defects' => [
@@ -65,7 +68,7 @@ final class SchemaGuard
         'confidence' => [
             'overall' => 0.00,
             'byField' => [
-                'tags' => 0.00,
+                'facets' => 0.00,
                 'media.defects' => 0.00,
                 'artDescription' => 0.00,
                 'fontDescription' => 0.00,
@@ -96,11 +99,16 @@ final class SchemaGuard
 
         $out = self::DEF_PAYLOAD;
 
-        // tags
-        $out['tags'] = self::norm_list($p['tags'] ?? [], maxLen: 8);
+        // facets
+        $out['topics'] = self::norm_list($p['topics'] ?? [], maxLen: 4);
+        $out['feelings'] = self::norm_list($p['feelings'] ?? [], maxLen: 3);
+        $out['meanings'] = self::norm_list($p['meanings'] ?? [], maxLen: 2);
 
         // secretDescription
         $out['secretDescription'] = self::norm_str($p['secretDescription'] ?? '');
+
+        // teachesWisdom
+        $out['teachesWisdom'] = (bool)($p['teachesWisdom'] ?? false);
 
         // media
         $out['media']['type'] = self::enum($p['media']['type'] ?? 'unknown', 'media.type');
@@ -137,7 +145,7 @@ final class SchemaGuard
         $out['confidence'] = [
             'overall' => self::f01($c['overall'] ?? 0.00),
             'byField' => [
-                'tags' => self::f01($bf['tags'] ?? 0.00),
+                'facets' => self::f01($bf['facets'] ?? 0.00),
                 'media.defects' => self::f01($bf['media.defects'] ?? 0.00),
                 'artDescription' => self::f01($bf['artDescription'] ?? 0.00),
                 'fontDescription' => self::f01($bf['fontDescription'] ?? 0.00),
@@ -168,7 +176,6 @@ final class SchemaGuard
         $full = is_string($full) ? self::norm_text($full, 2000) : null;
         $lang = strtolower(self::norm_str($tx['language'] ?? 'unknown'));
         if ($lang === '') $lang = 'unknown';
-        $hand = (bool)($tx['handwriting'] ?? false);
 
         return [
             'artDescription' => $art,
@@ -176,7 +183,6 @@ final class SchemaGuard
             'text' => [
                 'fullText' => $full,
                 'language' => $lang,
-                'handwriting' => $hand,
             ],
         ];
     }

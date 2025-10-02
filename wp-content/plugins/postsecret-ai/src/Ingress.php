@@ -160,11 +160,20 @@ final class Ingress
 function psai_store_result(int $att_id, array $payload, string $model): void
 {
     $promptVer = \PSAI\Prompt::VERSION . '#sha256:' . substr(hash('sha256', \PSAI\Prompt::TEXT), 0, 8);
-    $tags = array_values(array_filter(array_map('strval', $payload['tags'] ?? [])));
-    sort($tags);
+
+    // Extract and normalize facets
+    $topics = array_values(array_filter(array_map('strval', $payload['topics'] ?? [])));
+    $feelings = array_values(array_filter(array_map('strval', $payload['feelings'] ?? [])));
+    $meanings = array_values(array_filter(array_map('strval', $payload['meanings'] ?? [])));
+    sort($topics);
+    sort($feelings);
+    sort($meanings);
 
     update_post_meta($att_id, '_ps_payload', $payload);
-    update_post_meta($att_id, '_ps_tags', $tags);
+    update_post_meta($att_id, '_ps_topics', $topics);
+    update_post_meta($att_id, '_ps_feelings', $feelings);
+    update_post_meta($att_id, '_ps_meanings', $meanings);
+    update_post_meta($att_id, '_ps_teaches_wisdom', (bool)($payload['teachesWisdom'] ?? false) ? '1' : '0');
     update_post_meta($att_id, '_ps_model', $model);
     update_post_meta($att_id, '_ps_prompt_version', $promptVer);
     update_post_meta($att_id, '_ps_updated_at', wp_date('c'));
@@ -195,7 +204,9 @@ function psai_update_manifest(int $att_id, array $payload): void
 
     $file = wp_basename(get_attached_file($att_id));
     $entry = ['sourceImage' => $file, 'json' => $att_id . '.json'];
-    if (!empty($payload['tags'])) $entry['tags'] = array_values((array)$payload['tags']);
+    if (!empty($payload['topics'])) $entry['topics'] = array_values((array)$payload['topics']);
+    if (!empty($payload['feelings'])) $entry['feelings'] = array_values((array)$payload['feelings']);
+    if (!empty($payload['meanings'])) $entry['meanings'] = array_values((array)$payload['meanings']);
 
     // upsert by sourceImage
     $by = [];
