@@ -347,3 +347,50 @@ add_action('admin_notices', function () {
         echo '<div class="notice notice-warning is-dismissible"><p>PostSecret AI: Uploaded image matches an existing file (duplicate marked).</p></div>';
     }
 });
+
+
+/**
+ * Quick log peek for admins: /wp-json/psai/v1/debug-log?lines=200
+ */
+add_action('rest_api_init', function () {
+    register_rest_route('psai/v1', '/debug-log', [
+        'methods' => 'GET',
+        'permission_callback' => function () {
+            return current_user_can('manage_options');
+        },
+        'args' => [
+            'lines' => ['type' => 'integer', 'default' => 200, 'minimum' => 10, 'maximum' => 2000],
+        ],
+        'callback' => function (\WP_REST_Request $req) {
+            $file = WP_CONTENT_DIR . '/debug.log';
+            if (!file_exists($file)) {
+                return new \WP_REST_Response(['exists' => false, 'message' => 'No debug.log yet'], 200);
+            }
+            $n = (int)$req->get_param('lines');
+            $n = max(10, min(2000, $n));
+            $lines = [];
+            $fp = fopen($file, 'r');
+            if (!$fp) return new \WP_Error('fs_error', 'Cannot open debug.log');
+            // tail n lines
+            $pos = -1;
+            $line = '';
+            fseek($fp, 0, SEEK_END);
+            $len = ftell($fp);
+            while ($len > 0 && count($lines) <= $n) {
+                $char = '';
+                fseek($fp, $len--, SEEK_SET);
+                $char = fgetc($fp);
+                if ($char === "\n" && $line !== '') {
+                    $lines[] = strrev($line);
+                    $line = '';
+                    continue;
+                }
+                $line .= $char;
+            }
+            if ($line !== '') $lines[] = strrev($line);
+            fclose($fp);
+            $lines = array_slice(array_reverse($lines), -$n);
+            return new \WP_REST_Response(['exists' => true, 'lines' => $lines], 200);
+        },
+    ]);
+});
