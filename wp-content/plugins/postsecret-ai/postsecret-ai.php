@@ -356,7 +356,7 @@ add_action('rest_api_init', function () {
     register_rest_route('psai/v1', '/debug-log', [
         'methods' => 'GET',
         'permission_callback' => function () {
-            return current_user_can('manage_options');
+            return is_user_logged_in() && current_user_can('edit_posts');
         },
         'args' => [
             'lines' => ['type' => 'integer', 'default' => 200, 'minimum' => 10, 'maximum' => 2000],
