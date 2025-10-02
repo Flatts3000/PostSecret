@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PostSecret AI (Ultra-MVP)
  * Description: Admin-only tools for classification: test console + single postcard uploader.
- * Version: 0.0.4
+ * Version: 0.0.5
  */
 if (!defined('ABSPATH')) exit;
 
@@ -25,6 +25,44 @@ require __DIR__ . '/src/Settings.php';
 require __DIR__ . '/src/AdminPage.php';
 require __DIR__ . '/src/AdminSingleUpload.php';
 require __DIR__ . '/src/AdminMetaBox.php';
+
+/* ---------------------------------------------------------------------------
+ * Small helpers: set/clear last error consistently on attachments
+ * ------------------------------------------------------------------------- */
+if (!function_exists('psai_set_last_error')) {
+    /**
+     * Store a trimmed error string to _ps_last_error on one or more attachment IDs.
+     * @param int|array<int> $ids
+     * @param string $message
+     */
+    function psai_set_last_error($ids, string $message): void
+    {
+        $msg = substr(trim($message), 0, 500);
+        $ids = is_array($ids) ? $ids : [$ids];
+        foreach ($ids as $id) {
+            $id = (int)$id;
+            if ($id > 0) {
+                update_post_meta($id, '_ps_last_error', $msg);
+            }
+        }
+    }
+}
+if (!function_exists('psai_clear_last_error')) {
+    /**
+     * Remove _ps_last_error from one or more attachment IDs.
+     * @param int|array<int> $ids
+     */
+    function psai_clear_last_error($ids): void
+    {
+        $ids = is_array($ids) ? $ids : [$ids];
+        foreach ($ids as $id) {
+            $id = (int)$id;
+            if ($id > 0) {
+                delete_post_meta($id, '_ps_last_error');
+            }
+        }
+    }
+}
 
 /* ---------------------------------------------------------------------------
  * Menus
@@ -69,6 +107,8 @@ add_action('admin_init', ['PSAI\\Settings', 'register']);
 
 /* ---------------------------------------------------------------------------
  * Tester handler (Tools page) — URL-based single image test
+ * NOTE: This tester does not create attachments; we keep using transients
+ * but also store a global “last error” transient for quick feedback.
  * ------------------------------------------------------------------------- */
 add_action('admin_post_psai_classify', function () {
     if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
@@ -80,6 +120,7 @@ add_action('admin_post_psai_classify', function () {
     $image = isset($_POST['psai_image_url']) ? esc_url_raw(trim($_POST['psai_image_url'])) : '';
 
     if (!$api || !$image) {
+        set_transient('_ps_last_error_global', !$api ? 'Missing API key.' : 'Image URL is required.', 600);
         $q = ['page' => PSAI_SLUG, 'psai_err' => !$api ? 'no_key' : 'no_image'];
         wp_redirect(add_query_arg($q, admin_url('tools.php')));
         exit;
@@ -87,6 +128,7 @@ add_action('admin_post_psai_classify', function () {
 
     try {
         $payload = \PSAI\Classifier::classify($api, $model, $image, null);
+
         set_transient('psai_last_result', [
             'image_url' => $image,
             'model' => $model,
@@ -94,10 +136,14 @@ add_action('admin_post_psai_classify', function () {
             'ts' => time(),
         ], 600);
 
+        delete_transient('_ps_last_error_global');
+
         wp_redirect(add_query_arg(['page' => PSAI_SLUG, 'psai_done' => '1'], admin_url('tools.php')));
         exit;
     } catch (\Throwable $e) {
-        set_transient('psai_last_error', $e->getMessage(), 300);
+        $msg = substr($e->getMessage(), 0, 500);
+        set_transient('_ps_last_error_global', $msg, 600);
+        set_transient('psai_last_error', $msg, 300);
         wp_redirect(add_query_arg(['page' => PSAI_SLUG, 'psai_err' => 'call_failed'], admin_url('tools.php')));
         exit;
     }
@@ -119,14 +165,18 @@ add_action('admin_post_psai_upload_single', function () {
 
     // 1) FRONT (required)
     if (empty($_FILES['psai_front']['name'])) {
+        set_transient('_ps_last_error_global', 'Front image is required.', 600);
         wp_redirect(add_query_arg(['page' => 'psai_upload_single', 'psai_msg' => 'err'], admin_url('admin.php')));
         exit;
     }
+
     $front_id = \PSAI\Ingress::sideload($_FILES['psai_front'], 'front');
     if (!$front_id) {
+        set_transient('_ps_last_error_global', 'Failed to import front image.', 600);
         wp_redirect(add_query_arg(['page' => 'psai_upload_single', 'psai_msg' => 'err'], admin_url('admin.php')));
         exit;
     }
+
     if (\PSAI\Ingress::mark_exact_duplicate($front_id)) $had_dupe = true;
 
     // 2) BACK (optional)
@@ -135,6 +185,9 @@ add_action('admin_post_psai_upload_single', function () {
         if ($back_id) {
             \PSAI\Ingress::pair($front_id, $back_id);
             if (\PSAI\Ingress::mark_exact_duplicate($back_id)) $had_dupe = true;
+        } else {
+            // record on the front if back import failed
+            psai_set_last_error($front_id, 'Failed to import back image.');
         }
     }
 
@@ -151,10 +204,6 @@ add_action('admin_post_psai_upload_single', function () {
 
 /* ---------------------------------------------------------------------------
  * Background (and on-demand) processor for a front/back pair
- * - builds data URLs (works on localhost/private)
- * - classifies
- * - stores payload + flags, syncs attachment fields
- * - computes orientation/color
  * ------------------------------------------------------------------------- */
 add_action('psai_process_pair_event', function ($front_id, $back_id = 0) {
     $front_id = (int)$front_id;
@@ -164,8 +213,19 @@ add_action('psai_process_pair_event', function ($front_id, $back_id = 0) {
     $api = $env['API_KEY'] ?? '';
     $model = $env['MODEL_NAME'] ?? 'gpt-4o-mini';
 
-    if (!$api || !$front_id) return;
-    if (get_post_meta($front_id, '_ps_duplicate_of', true)) return;
+    // Precondition checks → set error and bail cleanly
+    if (!$front_id) {
+        set_transient('_ps_last_error_global', 'Missing front_id in processor.', 600);
+        return;
+    }
+    if (get_post_meta($front_id, '_ps_duplicate_of', true)) {
+        psai_set_last_error($front_id, 'Skipped: duplicate image.');
+        return;
+    }
+    if (!$api) {
+        psai_set_last_error([$front_id, $back_id], 'Missing OpenAI API key.');
+        return;
+    }
 
     try {
         // Data URLs so we don’t rely on public URLs
@@ -179,7 +239,7 @@ add_action('psai_process_pair_event', function ($front_id, $back_id = 0) {
         // Store result (sets tags, model, prompt version, vetted flags)
         \PSAI\psai_store_result($front_id, $payload, $model);
 
-        // Sync media fields (Alt/Caption/Description) — safe no-op if class missing
+        // Sync media fields (Alt/Caption/Description)
         \PSAI\AttachmentSync::sync_from_payload($front_id, $payload, $back_id);
 
         // Enrich quick orientation/color on both sides
@@ -198,27 +258,22 @@ add_action('psai_process_pair_event', function ($front_id, $back_id = 0) {
             update_post_meta($back_id, '_ps_model', get_post_meta($front_id, '_ps_model', true));
             update_post_meta($back_id, '_ps_prompt_version', get_post_meta($front_id, '_ps_prompt_version', true));
             update_post_meta($back_id, '_ps_updated_at', wp_date('c'));
-
-            // keep vetted flags mirrored on back for UI/API convenience
             $rs = get_post_meta($front_id, '_ps_review_status', true);
             update_post_meta($back_id, '_ps_review_status', $rs);
             update_post_meta($back_id, '_ps_is_vetted', $rs === 'auto_vetted' ? '1' : '0');
         }
 
-        delete_post_meta($front_id, '_ps_last_error');
-        if ($back_id) delete_post_meta($back_id, '_ps_last_error');
+        // Clear any previous errors on success
+        psai_clear_last_error([$front_id, $back_id]);
 
     } catch (\Throwable $e) {
         $msg = substr($e->getMessage(), 0, 500);
-        update_post_meta($front_id, '_ps_last_error', $msg);
-        if ($back_id) update_post_meta($back_id, '_ps_last_error', $msg);
+        psai_set_last_error([$front_id, $back_id], $msg);
     }
 }, 10, 2);
 
 /* ---------------------------------------------------------------------------
  * “Process now” button on the attachment edit screen
- * - If payload missing → classify this single attachment (front-only)
- * - In all cases → normalize flags + compute orientation/color
  * ------------------------------------------------------------------------- */
 add_action('admin_post_psai_process_now', function () {
     if (!current_user_can('upload_files')) wp_die('Not allowed', 403);
@@ -262,14 +317,15 @@ add_action('admin_post_psai_process_now', function () {
         // Also compute orientation/color for the side the user is viewing
         \PSAI\Metadata::compute_and_store($att);
 
-        delete_post_meta($front_id, '_ps_last_error');
+        psai_clear_last_error($front_id);
 
         $url = add_query_arg(['psai_msg' => 'ok'], get_edit_post_link($att, ''));
         wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=ok'));
         exit;
 
     } catch (\Throwable $e) {
-        update_post_meta($att, '_ps_last_error', substr($e->getMessage(), 0, 500));
+        $msg = substr($e->getMessage(), 0, 500);
+        psai_set_last_error($att, $msg);
         $url = add_query_arg(['psai_msg' => 'err'], get_edit_post_link($att, ''));
         wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=err'));
         exit;
@@ -317,14 +373,14 @@ add_action('admin_post_psai_reclassify', function () {
         \PSAI\Ingress::normalize_from_existing_payload($front_id);
         \PSAI\Metadata::compute_and_store($att);
 
-        delete_post_meta($front_id, '_ps_last_error');
+        psai_clear_last_error($front_id);
 
         $url = add_query_arg(['psai_msg' => 'reclassified'], get_edit_post_link($att, ''));
         wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=reclassified'));
         exit;
 
     } catch (\Throwable $e) {
-        update_post_meta($att, '_ps_last_error', substr($e->getMessage(), 0, 500));
+        psai_set_last_error($att, substr($e->getMessage(), 0, 500));
         $url = add_query_arg(['psai_msg' => 'err'], get_edit_post_link($att, ''));
         wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=err'));
         exit;
@@ -350,7 +406,8 @@ add_action('admin_notices', function () {
 
 
 /**
- * Quick log peek for admins: /wp-json/psai/v1/debug-log?lines=200
+ * Quick log peek: /wp-json/psai/v1/debug-log?lines=200
+ * (Permissive: any logged-in user. Switch to stricter if needed.)
  */
 add_action('rest_api_init', function () {
     register_rest_route('psai/v1', '/debug-log', [
@@ -362,22 +419,25 @@ add_action('rest_api_init', function () {
             'lines' => ['type' => 'integer', 'default' => 200, 'minimum' => 10, 'maximum' => 2000],
         ],
         'callback' => function (\WP_REST_Request $req) {
-            $file = WP_CONTENT_DIR . '/debug.log';
+            $content_dir = defined('WP_CONTENT_DIR') ? WP_CONTENT_DIR : ABSPATH . 'wp-content';
+            $file = trailingslashit($content_dir) . 'debug.log';
+
             if (!file_exists($file)) {
                 return new \WP_REST_Response(['exists' => false, 'message' => 'No debug.log yet'], 200);
             }
             $n = (int)$req->get_param('lines');
             $n = max(10, min(2000, $n));
+
             $lines = [];
             $fp = fopen($file, 'r');
             if (!$fp) return new \WP_Error('fs_error', 'Cannot open debug.log');
+
             // tail n lines
             $pos = -1;
             $line = '';
             fseek($fp, 0, SEEK_END);
             $len = ftell($fp);
             while ($len > 0 && count($lines) <= $n) {
-                $char = '';
                 fseek($fp, $len--, SEEK_SET);
                 $char = fgetc($fp);
                 if ($char === "\n" && $line !== '') {
@@ -389,6 +449,7 @@ add_action('rest_api_init', function () {
             }
             if ($line !== '') $lines[] = strrev($line);
             fclose($fp);
+
             $lines = array_slice(array_reverse($lines), -$n);
             return new \WP_REST_Response(['exists' => true, 'lines' => $lines], 200);
         },
