@@ -1,5 +1,5 @@
-<!-- wp:group {"className":"ps-header ps-header--frost","style":{"spacing":{"padding":{"top":"var:preset|spacing|40","bottom":"var:preset|spacing|40","left":"var:preset|spacing|50","right":"var:preset|spacing|50"},"blockGap":"var:preset|spacing|30"},"border":{"bottom":{"color":"var(--wp--preset--color--border)","width":"1px"}}},"layout":{"type":"flex","flexWrap":"nowrap","justifyContent":"space-between","verticalAlignment":"center"}} -->
-<div class="wp-block-group ps-header ps-header--frost" style="border-bottom:1px solid var(--wp--preset--color--border);padding-top:var(--wp--preset--spacing--40);padding-right:var(--wp--preset--spacing--50);padding-bottom:var(--wp--preset--spacing--40);padding-left:var(--wp--preset--spacing--50)">
+<!-- wp:group {"className":"ps-header ps-header--frost","style":{"spacing":{"padding":{"top":"var:preset|spacing|30","bottom":"var:preset|spacing|50","left":"var:preset|spacing|50","right":"var:preset|spacing|50"},"blockGap":"var:preset|spacing|30"},"border":{"bottom":{"width":"0px"}}},"layout":{"type":"flex","flexWrap":"nowrap","justifyContent":"space-between","verticalAlignment":"center"}} -->
+<div class="wp-block-group ps-header ps-header--frost" style="border-bottom-width:0px;padding-top:var(--wp--preset--spacing--30);padding-right:var(--wp--preset--spacing--50);padding-bottom:var(--wp--preset--spacing--50);padding-left:var(--wp--preset--spacing--50)">
 
     <!-- LEFT: Logo -->
     <!-- wp:html -->
@@ -46,7 +46,7 @@
         <!-- Archive Search (fast, minimal, CPT=secret) -->
         <!-- wp:html -->
         <form class="ps-search" role="search" method="get" action="/">
-            <input class="ps-search__input" type="search" name="s" placeholder="Search secrets…" aria-label="Search secrets"/>
+            <input class="ps-search__input" type="search" name="s" placeholder="How do you feel?" aria-label="How do you feel?"/>
             <input type="hidden" name="post_type" value="secret"/>
             <button class="ps-search__btn" type="submit" aria-label="Submit search">
                 <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
@@ -69,5 +69,6 @@
         <!-- /wp:buttons -->
     </div>
     <!-- /wp:group -->
+
 </div>
 <!-- /wp:group -->

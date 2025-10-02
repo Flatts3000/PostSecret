@@ -1,6 +1,6 @@
 /* PostSecret — Home Stream (scoped)
-   - Only affects content inside .ps-latest
-   - Uses theme tokens (theme.json) for colors
+   - Archival gallery aesthetic
+   - Uses theme tokens for strict black/white/red palette
    - Container-query responsive density
    - Respects reduced motion
 */
@@ -10,24 +10,29 @@
 ------------------------------ */
 .ps-latest .ps-stream {
     display: grid;
-    gap: clamp(16px, 2.5vw, 24px);
+    gap: clamp(24px, 3vw, 32px);
     grid-template-columns: 1fr;
-    max-width: 800px;
+    max-width: 1200px; /* Wider for archival layout */
     margin: 0 auto;
+    padding: var(--breathing-room, 2rem);
     container-type: inline-size; /* enable container queries */
 }
 
 /* ------------------------------
-   Card
+   Card - Archival gallery style
 ------------------------------ */
 .ps-latest .ps-card {
-    background: var(--wp--preset--color--surface);
-    border: 1px solid var(--wp--preset--color--border);
-    border-radius: 12px;
+    background: var(--wp--preset--color--bg);
+    border: none;
+    border-radius: 0;
     overflow: clip;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, .05), 0 8px 24px rgba(0, 0, 0, .08);
-    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-    will-change: transform;
+    box-shadow: none;
+    transition: background-color .18s ease;
+    will-change: background-color;
+}
+
+.ps-latest .ps-card:hover {
+    background: var(--wp--preset--color--tint);
 }
 
 /* Flippable card container */
@@ -64,11 +69,9 @@
     transform: rotateY(180deg);
 }
 
-.ps-latest .ps-card:hover,
 .ps-latest .ps-card:focus-within {
-    transform: translateY(-2px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, .08), 0 16px 40px rgba(0, 0, 0, .12);
-    border-color: color-mix(in oklab, var(--wp--preset--color--border) 70%, var(--wp--preset--color--text));
+    outline: 2px solid var(--wp--preset--color--accent);
+    outline-offset: 2px;
 }
 
 .ps-latest .ps-card__link {
@@ -180,9 +183,9 @@
     position: absolute;
     top: 24px;
     right: 16px;
-    background: var(--wp--preset--color--surface);
+    background: var(--wp--preset--color--bg);
     color: var(--wp--preset--color--text);
-    border: 1px solid var(--wp--preset--color--border);
+    border: none;
     border-radius: 50%;
     width: 54px;
     height: 54px;
@@ -193,15 +196,15 @@
     font-size: 1.95rem;
     line-height: 1;
     transition: all .18s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+    box-shadow: none;
     z-index: 100;
 }
 
 .ps-latest .ps-card__flip-btn:hover {
     background: var(--wp--preset--color--bg);
     transform: rotate(180deg);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, .2);
-    border-color: color-mix(in oklab, var(--wp--preset--color--border) 60%, var(--wp--preset--color--text));
+    box-shadow: none;
+    color: var(--wp--preset--color--accent);
 }
 
 .ps-latest .ps-card__flip-btn:focus-visible {
@@ -211,11 +214,11 @@
 
 /* Dark mode adjustments */
 html[data-theme="dark"] .ps-latest .ps-card__flip-btn {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
+    box-shadow: none;
 }
 
 html[data-theme="dark"] .ps-latest .ps-card__flip-btn:hover {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, .4);
+    box-shadow: none;
 }
 
 /* ------------------------------
@@ -241,7 +244,7 @@ html[data-theme="dark"] .ps-latest .ps-card__flip-btn:hover {
     color: var(--wp--preset--color--text);
 }
 
-/* Tags */
+/* Tags - Red accent chips */
 .ps-latest .ps-card__tags {
     margin-top: .55rem;
     display: flex;
@@ -250,24 +253,27 @@ html[data-theme="dark"] .ps-latest .ps-card__flip-btn:hover {
 }
 
 .ps-latest .ps-chip {
-    font-size: .78rem;
-    border: 1px solid var(--wp--preset--color--border);
-    background: color-mix(in oklab, var(--wp--preset--color--surface) 85%, transparent);
-    color: var(--wp--preset--color--text);
-    border-radius: 999px;
-    padding: 2px 8px;
+    font-size: .75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: none;
+    background: transparent;
+    color: var(--wp--preset--color--accent);
+    border-radius: 0;
+    padding: 4px 8px;
     white-space: nowrap;
-    line-height: 1.8;
-    transition: border-color .18s ease, background-color .18s ease;
+    line-height: 1.4;
+    transition: background-color .18s ease, color .18s ease;
 }
 
 .ps-latest .ps-chip:hover {
-    border-color: color-mix(in oklab, var(--wp--preset--color--border) 60%, var(--wp--preset--color--text));
-    background: color-mix(in oklab, var(--wp--preset--color--surface) 60%, transparent);
+    background: var(--wp--preset--color--accent);
+    color: #ffffff;
 }
 
 .ps-latest .ps-chip--more {
-    opacity: .75
+    opacity: .7;
 }
 
 /* ------------------------------
@@ -307,8 +313,8 @@ html[data-theme="dark"] .ps-latest .ps-card__flip-btn:hover {
 /* Polished skeleton shimmer */
 .ps-latest .ps-skeleton {
     height: clamp(200px, 26vw, 260px);
-    border-radius: 12px;
-    border: 1px solid var(--wp--preset--color--border);
+    border-radius: 0;
+    border: none;
     background: linear-gradient(90deg,
     transparent 0%,
     rgba(255, 255, 255, .6) 40%,
@@ -318,7 +324,7 @@ html[data-theme="dark"] .ps-latest .ps-card__flip-btn:hover {
     var(--wp--preset--color--surface);
     background-size: 200% 100%, cover;
     animation: ps-shimmer 1.2s infinite;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, .05), 0 8px 24px rgba(0, 0, 0, .08);
+    box-shadow: none;
 }
 
 @keyframes ps-shimmer {
