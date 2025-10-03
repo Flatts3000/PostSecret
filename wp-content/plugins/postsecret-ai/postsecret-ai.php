@@ -14,6 +14,7 @@ require __DIR__ . '/src/Schema.php';
 require __DIR__ . '/src/SchemaGuard.php';
 require __DIR__ . '/src/Classifier.php';
 require __DIR__ . '/src/EmbeddingService.php';
+require __DIR__ . '/src/ClassificationService.php';
 
 // Utilities
 require __DIR__ . '/src/Metadata.php';
@@ -99,6 +100,17 @@ add_action('admin_menu', function () {
         'upload_files',
         'psai_upload_single',
         ['PSAI\\AdminSingleUpload', 'render']
+    );
+
+    add_submenu_page(
+        'psai_postcards',
+        'Bulk Upload',
+        'Bulk Upload',
+        'upload_files',
+        'psai_bulk_upload',
+        function () {
+            echo '<div class="wrap"><h1>Bulk Upload</h1><p>Bulk upload interface coming soon.</p></div>';
+        }
     );
 });
 
@@ -209,71 +221,11 @@ add_action('psai_process_pair_event', function ($front_id, $back_id = 0) {
     $front_id = (int)$front_id;
     $back_id = (int)$back_id ?: null;
 
-    $env = get_option(\PSAI\Settings::OPTION, \PSAI\Settings::defaults());
-    $api = $env['API_KEY'] ?? '';
-    $model = $env['MODEL_NAME'] ?? 'gpt-4o-mini';
-
-    // Precondition checks → set error and bail cleanly
-    if (!$front_id) {
-        set_transient('_ps_last_error_global', 'Missing front_id in processor.', 600);
-        return;
-    }
-    if (get_post_meta($front_id, '_ps_duplicate_of', true)) {
-        psai_set_last_error($front_id, 'Skipped: duplicate image.');
-        return;
-    }
-    if (!$api) {
-        psai_set_last_error([$front_id, $back_id], 'Missing OpenAI API key.');
-        return;
-    }
-
-    try {
-        // Data URLs so we don’t rely on public URLs
-        $frontSrc = \PSAI\psai_make_data_url($front_id);
-        $backSrc = $back_id ? \PSAI\psai_make_data_url($back_id) : null;
-
-        // Classify + normalize to schema
-        $payload = \PSAI\Classifier::classify($api, $model, $frontSrc, $backSrc);
-        $payload = \PSAI\SchemaGuard::normalize($payload);
-
-        // Store result (sets tags, model, prompt version, vetted flags)
-        \PSAI\psai_store_result($front_id, $payload, $model);
-
-        // Sync media fields (Alt/Caption/Description)
-        \PSAI\AttachmentSync::sync_from_payload($front_id, $payload, $back_id);
-
-        // Enrich quick orientation/color on both sides
-        \PSAI\Metadata::compute_and_store($front_id);
-        if ($back_id) \PSAI\Metadata::compute_and_store($back_id);
-
-        // Optional export manifest
-        \PSAI\psai_update_manifest($front_id, $payload);
-
-        // Mirror some fields onto back (paired) for convenience
-        if ($back_id) {
-            update_post_meta($back_id, '_ps_pair_id', $front_id);
-            update_post_meta($back_id, '_ps_side', 'back');
-            update_post_meta($back_id, '_ps_payload', $payload);
-            update_post_meta($back_id, '_ps_tags', get_post_meta($front_id, '_ps_tags', true));
-            update_post_meta($back_id, '_ps_model', get_post_meta($front_id, '_ps_model', true));
-            update_post_meta($back_id, '_ps_prompt_version', get_post_meta($front_id, '_ps_prompt_version', true));
-            update_post_meta($back_id, '_ps_updated_at', wp_date('c'));
-            $rs = get_post_meta($front_id, '_ps_review_status', true);
-            update_post_meta($back_id, '_ps_review_status', $rs);
-            update_post_meta($back_id, '_ps_is_vetted', $rs === 'auto_vetted' ? '1' : '0');
-        }
-
-        // Clear any previous errors on success
-        psai_clear_last_error([$front_id, $back_id]);
-
-    } catch (\Throwable $e) {
-        $msg = substr($e->getMessage(), 0, 500);
-        psai_set_last_error([$front_id, $back_id], $msg);
-    }
+    \PSAI\ClassificationService::classify_and_store($front_id, $back_id, false);
 }, 10, 2);
 
 /* ---------------------------------------------------------------------------
- * “Process now” button on the attachment edit screen
+ * "Process now" button on the attachment edit screen
  * ------------------------------------------------------------------------- */
 add_action('admin_post_psai_process_now', function () {
     if (!current_user_can('upload_files')) wp_die('Not allowed', 403);
@@ -285,51 +237,16 @@ add_action('admin_post_psai_process_now', function () {
         exit;
     }
 
-    try {
-        // If this is the back, flip to the front as canonical
-        $maybePair = (int)get_post_meta($att, '_ps_pair_id', true);
-        $side = get_post_meta($att, '_ps_side', true);
-        $front_id = ($side === 'back' && $maybePair) ? $maybePair : $att;
+    $result = \PSAI\ClassificationService::process_attachment($att, false);
 
-        // Classify if we don't already have a payload
-        $payload = get_post_meta($front_id, '_ps_payload', true);
-        if (!is_array($payload)) {
-            $env = get_option(\PSAI\Settings::OPTION, \PSAI\Settings::defaults());
-            $api = $env['API_KEY'] ?? '';
-            $model = $env['MODEL_NAME'] ?? 'gpt-4o-mini';
-            if (!$api) throw new \RuntimeException('Missing OpenAI API key.');
-
-            $frontSrc = \PSAI\psai_make_data_url($front_id);
-            $payload = \PSAI\Classifier::classify($api, $model, $frontSrc, null);
-            $payload = \PSAI\SchemaGuard::normalize($payload);
-
-            \PSAI\psai_store_result($front_id, $payload, $model);
-            \PSAI\AttachmentSync::sync_from_payload($front_id, $payload, null);
-
-            // Generate and store embedding for new classifications
-            $embed_model = $env['EMBEDDING_MODEL'] ?? 'text-embedding-3-small';
-            \PSAI\EmbeddingService::generate_and_store($front_id, $payload, $api, $embed_model);
-        }
-
-        // Normalize flags from the saved payload + recompute metadata
-        \PSAI\Ingress::normalize_from_existing_payload($front_id);
-
-        // Also compute orientation/color for the side the user is viewing
-        \PSAI\Metadata::compute_and_store($att);
-
-        psai_clear_last_error($front_id);
-
+    if ($result['success']) {
         $url = add_query_arg(['psai_msg' => 'ok'], get_edit_post_link($att, ''));
         wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=ok'));
-        exit;
-
-    } catch (\Throwable $e) {
-        $msg = substr($e->getMessage(), 0, 500);
-        psai_set_last_error($att, $msg);
+    } else {
         $url = add_query_arg(['psai_msg' => 'err'], get_edit_post_link($att, ''));
         wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=err'));
-        exit;
     }
+    exit;
 });
 
 /* -------------------------------------------------------------------------
@@ -345,75 +262,30 @@ add_action('admin_post_psai_reclassify', function () {
         exit;
     }
 
-    $error_details = [];
+    $result = \PSAI\ClassificationService::process_attachment($att, true);
 
-    try {
-        // If this is the back, flip to the front as canonical
-        $maybePair = (int)get_post_meta($att, '_ps_pair_id', true);
+    if ($result['success']) {
+        // Check if there was a partial error (embedding failed but classification succeeded)
+        $front_id = $att;
         $side = get_post_meta($att, '_ps_side', true);
-        $front_id = ($side === 'back' && $maybePair) ? $maybePair : $att;
-
-        // Get config
-        $env = get_option(\PSAI\Settings::OPTION, \PSAI\Settings::defaults());
-        $api = $env['API_KEY'] ?? '';
-        $model = $env['MODEL_NAME'] ?? 'gpt-4o-mini';
-        if (!$api) throw new \RuntimeException('Missing OpenAI API key.');
-
-        // Force re-classification
-        $frontSrc = \PSAI\psai_make_data_url($front_id);
-        $payload = \PSAI\Classifier::classify($api, $model, $frontSrc, null);
-        $payload = \PSAI\SchemaGuard::normalize($payload);
-
-        \PSAI\psai_store_result($front_id, $payload, $model);
-        \PSAI\AttachmentSync::sync_from_payload($front_id, $payload, null);
-
-        // Generate and store embedding with detailed error capture
-        $embed_model = $env['EMBEDDING_MODEL'] ?? 'text-embedding-3-small';
-        $embedding_ok = \PSAI\EmbeddingService::generate_and_store($front_id, $payload, $api, $embed_model);
-
-        if (!$embedding_ok) {
-            // The error is already stored in _ps_last_error by EmbeddingService
-            // Just get it to show in the notice
-            $stored_error = get_post_meta($front_id, '_ps_last_error', true);
-
-            // Also try transient for additional context
-            $transient_error = get_transient('_ps_last_embedding_error');
-
-            if ($stored_error) {
-                $error_details[] = $stored_error;
-            } elseif ($transient_error) {
-                $error_details[] = $transient_error;
-                // Store it persistently since transient might expire
-                psai_set_last_error($front_id, 'Classification succeeded but embedding failed. ' . $transient_error);
-            } else {
-                $error_details[] = 'Embedding generation failed - check API key and model configuration';
-                psai_set_last_error($front_id, 'Classification succeeded but embedding generation failed. Check API key and model configuration.');
-            }
+        $maybePair = (int)get_post_meta($att, '_ps_pair_id', true);
+        if ($side === 'back' && $maybePair) {
+            $front_id = $maybePair;
         }
 
-        // Normalize flags + recompute metadata
-        \PSAI\Ingress::normalize_from_existing_payload($front_id);
-        \PSAI\Metadata::compute_and_store($att);
-
-        // If embedding failed but classification succeeded, show partial error
-        if (!$embedding_ok) {
+        $last_error = get_post_meta($front_id, '_ps_last_error', true);
+        if ($last_error && str_contains($last_error, 'embedding')) {
             $url = add_query_arg(['psai_msg' => 'partial_err'], get_edit_post_link($att, ''));
             wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=partial_err'));
-            exit;
+        } else {
+            $url = add_query_arg(['psai_msg' => 'reclassified'], get_edit_post_link($att, ''));
+            wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=reclassified'));
         }
-
-        psai_clear_last_error($front_id);
-
-        $url = add_query_arg(['psai_msg' => 'reclassified'], get_edit_post_link($att, ''));
-        wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=reclassified'));
-        exit;
-
-    } catch (\Throwable $e) {
-        psai_set_last_error($att, substr($e->getMessage(), 0, 500));
+    } else {
         $url = add_query_arg(['psai_msg' => 'err'], get_edit_post_link($att, ''));
         wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=err'));
-        exit;
     }
+    exit;
 });
 
 /* Small admin notice so you know the button worked */
