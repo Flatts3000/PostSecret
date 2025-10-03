@@ -38,6 +38,46 @@ function register_rest_routes()
         },
     ]);
 
+    // Diagnostic endpoint to check Qdrant configuration
+    register_rest_route('psai/v1', '/qdrant-status', [
+        'methods' => 'GET',
+        'permission_callback' => function () {
+            return is_user_logged_in() && current_user_can('manage_options');
+        },
+        'callback' => function () {
+            $qdrant_enabled = (bool)opt('QDRANT_ENABLE', true);
+            $qdrant_url = (string)opt('QDRANT_URL', '');
+            $env_url = getenv('PS_QDRANT_URL') ?: 'not set';
+            $const_url = defined('PS_QDRANT_URL') ? constant('PS_QDRANT_URL') : 'not set';
+
+            // Try to connect to Qdrant
+            $final_url = $qdrant_url !== '' ? $qdrant_url : ($env_url !== 'not set' ? $env_url : $const_url);
+            $qdrant_accessible = false;
+            $qdrant_error = null;
+
+            if ($final_url !== 'not set') {
+                $test_url = rtrim($final_url, '/') . '/collections';
+                $response = wp_remote_get($test_url, ['timeout' => 5]);
+                if (!is_wp_error($response)) {
+                    $code = wp_remote_retrieve_response_code($response);
+                    $qdrant_accessible = ($code === 200);
+                } else {
+                    $qdrant_error = $response->get_error_message();
+                }
+            }
+
+            return new WP_REST_Response([
+                'qdrant_enabled' => $qdrant_enabled,
+                'qdrant_url_settings' => $qdrant_url,
+                'qdrant_url_env' => $env_url,
+                'qdrant_url_const' => $const_url,
+                'qdrant_url_final' => $final_url,
+                'qdrant_accessible' => $qdrant_accessible,
+                'qdrant_error' => $qdrant_error,
+            ], 200);
+        },
+    ]);
+
     // POST /wp-json/psai/v1/semantic-search
     register_rest_route('psai/v1', '/semantic-search', [
         'methods' => 'POST',
@@ -117,8 +157,17 @@ function handle_semantic_search(WP_REST_Request $request)
     // Perform ANN search in Qdrant (returns null if Qdrant disabled/unavailable)
     $results = QdrantSearchService::search_by_vector($embedding, $model, $limit, $min_score, $filters);
     if ($results === null) {
+        // Log diagnostic info for debugging
+        $qdrant_url = getenv('PS_QDRANT_URL') ?: (defined('PS_QDRANT_URL') ? constant('PS_QDRANT_URL') : 'not set');
+        $settings_url = (string)opt('QDRANT_URL', '');
+        $qdrant_enabled = (bool)opt('QDRANT_ENABLE', true);
+
+        error_log("[PSSearch] Vector search unavailable. Qdrant enabled: " . ($qdrant_enabled ? 'yes' : 'no') .
+                  ", Env URL: {$qdrant_url}, Settings URL: {$settings_url}");
+
         // For query-based search we don't have a cheap MySQL brute-force fallback, so surface 503.
-        return new WP_Error('search_failed', 'Vector search unavailable', ['status' => 503]);
+        $error_details = "Qdrant not available. Check: 1) QDRANT_ENABLE in settings, 2) QDRANT_URL configured, 3) Qdrant service running";
+        return new WP_Error('search_failed', $error_details, ['status' => 503]);
     }
 
     if (empty($results)) {
