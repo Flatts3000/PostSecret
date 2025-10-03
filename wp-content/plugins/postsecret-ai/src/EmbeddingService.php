@@ -39,16 +39,27 @@ final class EmbeddingService
             // If API key wasn't supplied, use settings.
             if ($api_key === '') {
                 $api_key = (string)self::opt('API_KEY', '');
+                if ($api_key === '') {
+                    $msg = 'Embedding failed: OpenAI API key not configured in settings';
+                    error_log("[EmbeddingService] {$msg} for secret {$secret_id}");
+                    psai_set_last_error($secret_id, $msg);
+                    return false;
+                }
             }
 
             $input = self::build_embedding_input($payload);
             if ($input === '') {
-                error_log("[EmbeddingService] Empty embedding input for secret {$secret_id}; skipping.");
+                $msg = 'Embedding failed: Empty input (no topics/feelings/text extracted)';
+                error_log("[EmbeddingService] {$msg} for secret {$secret_id}");
+                psai_set_last_error($secret_id, $msg);
                 return false;
             }
 
             $embedding = self::generate_embedding($api_key, $model, $input);
             if ($embedding === null) {
+                $msg = 'Embedding failed: OpenAI API call returned no data (check API key, quota, and network)';
+                error_log("[EmbeddingService] {$msg} for secret {$secret_id}");
+                psai_set_last_error($secret_id, $msg);
                 return false;
             }
 
@@ -57,6 +68,9 @@ final class EmbeddingService
             // Canonical: store in MySQL
             $ok = self::store_embedding($secret_id, $model, $embedding, $payload);
             if (!$ok) {
+                $msg = 'Embedding failed: Database storage error';
+                error_log("[EmbeddingService] {$msg} for secret {$secret_id}");
+                psai_set_last_error($secret_id, $msg);
                 return false;
             }
 
@@ -72,14 +86,27 @@ final class EmbeddingService
                 /** @var array $qdrantPayload */
                 $qdrantPayload = apply_filters('psai/embedding/qdrant-payload', $qdrantPayload, $secret_id, $payload);
 
-                self::qdrant_upsert($secret_id, $model, $embedding, $qdrantPayload);
+                $qdrant_ok = self::qdrant_upsert($secret_id, $model, $embedding, $qdrantPayload);
+                if (!$qdrant_ok) {
+                    // Non-fatal - Qdrant is best-effort, but log it and store warning
+                    $msg = "Embedding stored in MySQL but Qdrant sync failed (check QDRANT_URL and QDRANT_API_KEY)";
+                    error_log("[EmbeddingService] Qdrant upsert failed for secret {$secret_id} (non-fatal)");
+
+                    // Store warning so user can see it
+                    $existing_error = get_post_meta($secret_id, '_ps_last_error', true);
+                    if (empty($existing_error)) {
+                        psai_set_last_error($secret_id, $msg);
+                    }
+                }
             }
 
             do_action('psai/embedding/saved', $secret_id, $model, $embedding, $payload);
             return true;
 
         } catch (\Throwable $e) {
-            error_log('[EmbeddingService] Error for secret ' . $secret_id . ': ' . $e->getMessage());
+            $msg = 'Embedding exception: ' . $e->getMessage();
+            error_log('[EmbeddingService] Error for secret ' . $secret_id . ': ' . $msg);
+            psai_set_last_error($secret_id, substr($msg, 0, 500));
             do_action('psai/embedding/error', $secret_id, $e);
             return false;
         }
@@ -182,7 +209,10 @@ final class EmbeddingService
         $res = wp_remote_post(self::openai_embeddings_url(), $args);
 
         if (is_wp_error($res)) {
-            error_log('[EmbeddingService] Embedding API error: ' . $res->get_error_message());
+            $err_msg = $res->get_error_message();
+            error_log('[EmbeddingService] Embedding API WP_Error: ' . $err_msg);
+            // Store the network/timeout error
+            set_transient('_ps_last_embedding_error', 'Network error: ' . $err_msg, 300);
             return null;
         }
 
@@ -191,6 +221,12 @@ final class EmbeddingService
 
         if ($code >= 300) {
             error_log('[EmbeddingService] Embedding API HTTP ' . $code . ': ' . substr($raw, 0, 600));
+
+            // Try to parse OpenAI error message
+            $json = json_decode($raw, true);
+            $openai_error = $json['error']['message'] ?? 'Unknown API error';
+            $err_msg = "OpenAI API HTTP {$code}: {$openai_error}";
+            set_transient('_ps_last_embedding_error', $err_msg, 300);
             return null;
         }
 
@@ -199,6 +235,7 @@ final class EmbeddingService
 
         if (!is_array($embedding) || $embedding === []) {
             error_log('[EmbeddingService] Invalid embedding response: ' . substr($raw, 0, 300));
+            set_transient('_ps_last_embedding_error', 'Invalid API response: missing embedding data', 300);
             return null;
         }
 
@@ -209,6 +246,9 @@ final class EmbeddingService
                 $model, $expected, count($embedding)
             ));
         }
+
+        // Clear any previous error on success
+        delete_transient('_ps_last_embedding_error');
 
         /** @var array<int,float> $embedding */
         return array_map(static fn($v) => (float)$v, $embedding);
@@ -278,11 +318,12 @@ final class EmbeddingService
 
     /**
      * Upsert a single point into Qdrant (best-effort).
+     * @return bool True if upsert succeeded, false otherwise
      */
-    private static function qdrant_upsert(int $secret_id, string $model, array $vector, array $payload = []): void
+    private static function qdrant_upsert(int $secret_id, string $model, array $vector, array $payload = []): bool
     {
         $base = self::qdrant_url();
-        if ($base === null) return;
+        if ($base === null) return false;
 
         // Ensure collection exists (cached)
         $collection = self::qdrant_collection($model);
@@ -299,7 +340,8 @@ final class EmbeddingService
             ]],
         ];
 
-        self::qdrant_request('PUT', "/collections/{$collection}/points?wait=true", $body, self::qdrant_timeout_seconds());
+        $result = self::qdrant_request('PUT', "/collections/{$collection}/points?wait=true", $body, self::qdrant_timeout_seconds());
+        return $result !== null && ($result['status'] ?? '') === 'ok';
     }
 
     /**
@@ -310,10 +352,12 @@ final class EmbeddingService
         $cache_key = "psai_qdrant_has_{$collection}";
         if (get_transient($cache_key)) return;
 
+        error_log("[EmbeddingService] Checking if Qdrant collection '{$collection}' exists...");
         $exists = self::qdrant_request('GET', "/collections/{$collection}", null, 5);
         $ok = is_array($exists) && (($exists['status'] ?? '') === 'ok');
 
         if (!$ok) {
+            error_log("[EmbeddingService] Collection '{$collection}' not found, creating with dimension {$dim}...");
             $create = [
                 'vectors' => [
                     'size' => $dim,
@@ -328,7 +372,21 @@ final class EmbeddingService
                     'indexing_threshold' => 0,  // index immediately (dev-friendly)
                 ],
             ];
-            self::qdrant_request('PUT', "/collections/{$collection}", $create, 20);
+            $result = self::qdrant_request('PUT', "/collections/{$collection}", $create, 20);
+
+            if ($result === null) {
+                error_log("[EmbeddingService] Failed to create collection '{$collection}'");
+                set_transient('_ps_last_qdrant_error', "Failed to create collection '{$collection}'", 300);
+                return; // Don't cache failure
+            }
+
+            if (($result['result'] ?? false) === true || ($result['status'] ?? '') === 'ok') {
+                error_log("[EmbeddingService] Successfully created collection '{$collection}'");
+            } else {
+                error_log("[EmbeddingService] Unexpected response when creating collection: " . wp_json_encode($result));
+            }
+        } else {
+            error_log("[EmbeddingService] Collection '{$collection}' already exists");
         }
 
         set_transient($cache_key, 1, HOUR_IN_SECONDS);
@@ -340,7 +398,10 @@ final class EmbeddingService
     private static function qdrant_request(string $method, string $path, ?array $body = null, int $timeout = null): ?array
     {
         $base = self::qdrant_url();
-        if ($base === null) return null;
+        if ($base === null) {
+            error_log('[EmbeddingService] Qdrant request skipped: URL not configured');
+            return null;
+        }
 
         $headers = [
             'Content-Type' => 'application/json',
@@ -363,10 +424,13 @@ final class EmbeddingService
         }
 
         $url = $base . $path;
+        error_log("[EmbeddingService] Qdrant request: {$method} {$url}");
         $res = wp_remote_request($url, $args);
 
         if (is_wp_error($res)) {
-            error_log('[EmbeddingService] Qdrant HTTP error: ' . $res->get_error_message());
+            $err = $res->get_error_message();
+            error_log("[EmbeddingService] Qdrant HTTP error: {$err}");
+            set_transient('_ps_last_qdrant_error', $err, 300);
             return null;
         }
 
@@ -375,10 +439,14 @@ final class EmbeddingService
 
         if ($code >= 300) {
             error_log("[EmbeddingService] Qdrant HTTP {$code}: " . substr($raw, 0, 300));
+            set_transient('_ps_last_qdrant_error', "HTTP {$code}: " . substr($raw, 0, 200), 300);
             return null;
         }
 
         $json = json_decode($raw, true);
+        if (is_array($json)) {
+            delete_transient('_ps_last_qdrant_error'); // Clear error on success
+        }
         return is_array($json) ? $json : null;
     }
 
@@ -494,7 +562,10 @@ final class EmbeddingService
         );
 
         if ($result === false) {
-            error_log("[EmbeddingService] DB write failed for secret {$secret_id}.");
+            $db_error = $wpdb->last_error ?: 'Unknown database error';
+            $msg = "DB write failed for secret {$secret_id}: {$db_error}";
+            error_log("[EmbeddingService] {$msg}");
+            psai_set_last_error($secret_id, "Embedding DB storage error: {$db_error}");
             return false;
         }
         return true;
@@ -536,6 +607,42 @@ final class EmbeddingService
     {
         $s = preg_replace('/\s+/u', ' ', $s ?? '') ?? '';
         return trim($s);
+    }
+
+    /**
+     * Build embedding input text from classification payload.
+     * Combines topics, feelings, meanings, and extracted text into a single string.
+     */
+    private static function build_embedding_input(array $payload): string
+    {
+        $parts = [];
+
+        // Add description/secret text
+        if (!empty($payload['secret'])) {
+            $parts[] = 'Secret: ' . self::sanitize_space((string)$payload['secret']);
+        }
+
+        // Add topics
+        if (!empty($payload['topics']) && is_array($payload['topics'])) {
+            $parts[] = 'Topics: ' . implode(', ', array_map('self::sanitize_space', $payload['topics']));
+        }
+
+        // Add feelings
+        if (!empty($payload['feelings']) && is_array($payload['feelings'])) {
+            $parts[] = 'Feelings: ' . implode(', ', array_map('self::sanitize_space', $payload['feelings']));
+        }
+
+        // Add meanings
+        if (!empty($payload['meanings']) && is_array($payload['meanings'])) {
+            $parts[] = 'Meanings: ' . implode(', ', array_map('self::sanitize_space', $payload['meanings']));
+        }
+
+        // Add extracted text if available
+        if (!empty($payload['text'])) {
+            $parts[] = 'Text: ' . self::sanitize_space((string)$payload['text']);
+        }
+
+        return implode('. ', $parts);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────

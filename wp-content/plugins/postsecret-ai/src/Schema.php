@@ -16,8 +16,8 @@ class Schema
 
             // 2) Qdrant (Vector DB) — moved directly below OpenAI
             ['section' => 'qdrant', 'order' => 10, 'key' => 'QDRANT_ENABLE', 'label' => 'Enable Qdrant', 'kind' => 'bool', 'default' => true, 'help' => 'Use Qdrant for ANN search (falls back to MySQL if disabled).'],
-            ['section' => 'qdrant', 'order' => 20, 'key' => 'QDRANT_URL', 'label' => 'Qdrant URL', 'kind' => 'str', 'default' => '', 'help' => 'e.g., http://<ip>:6333 (env: PS_QDRANT_URL)'],
-            ['section' => 'qdrant', 'order' => 30, 'key' => 'QDRANT_API_KEY', 'label' => 'Qdrant API Key', 'kind' => 'str', 'default' => '', 'secret' => true, 'help' => 'Sent as header: api-key: <value> (env: PS_QDRANT_API_KEY)'],
+            ['section' => 'qdrant', 'order' => 20, 'key' => 'QDRANT_URL', 'label' => 'Qdrant URL', 'kind' => 'str', 'default' => '', 'help' => 'e.g., http://178.156.164.233:6333 or http://localhost:6333 (env: PS_QDRANT_URL)'],
+            ['section' => 'qdrant', 'order' => 30, 'key' => 'QDRANT_API_KEY', 'label' => 'Qdrant API Key', 'kind' => 'str', 'default' => '', 'secret' => true, 'help' => 'Required for remote instances. Sent as header: api-key: <value> (env: PS_QDRANT_API_KEY)'],
             ['section' => 'qdrant', 'order' => 40, 'key' => 'QDRANT_COLLECTION', 'label' => 'Collection Name', 'kind' => 'str', 'default' => 'secrets_text_embedding_3_small', 'help' => 'Target collection name.'],
             ['section' => 'qdrant', 'order' => 50, 'key' => 'QDRANT_VECTOR_SIZE', 'label' => 'Vector Size', 'kind' => 'int', 'default' => 1536, 'min' => 1, 'help' => 'Embedding dimension (e.g., 1536 for text-embedding-3-small).'],
             ['section' => 'qdrant', 'order' => 60, 'key' => 'QDRANT_DISTANCE', 'label' => 'Distance Metric', 'kind' => 'choice', 'default' => 'Cosine', 'choices' => ['Cosine', 'Dot', 'Euclid'], 'help' => 'Must match collection config.'],
@@ -25,6 +25,7 @@ class Schema
             // 3) Model & Generation
             ['section' => 'model', 'order' => 10, 'key' => 'MODEL_PROVIDER', 'label' => 'Model Provider', 'kind' => 'choice', 'default' => 'openai', 'choices' => ['openai'], 'help' => 'Provider (fixed to OpenAI for MVP)'],
             ['section' => 'model', 'order' => 20, 'key' => 'MODEL_NAME', 'label' => 'Model Name', 'kind' => 'str', 'default' => 'gpt-4o-mini', 'help' => 'Vision-capable model'],
+            ['section' => 'model', 'order' => 30, 'key' => 'EMBEDDING_MODEL', 'label' => 'Embedding Model', 'kind' => 'choice', 'default' => 'text-embedding-3-small', 'choices' => ['text-embedding-3-small', 'text-embedding-3-large'], 'help' => 'Model for generating embeddings (small=1536d, large=3072d)'],
             ['section' => 'model', 'order' => 40, 'key' => 'TEMPERATURE', 'label' => 'Temperature', 'kind' => 'float', 'default' => 0.2, 'min' => 0.0, 'max' => 2.0, 'help' => 'Creativity (0.0–2.0)'],
             ['section' => 'model', 'order' => 50, 'key' => 'TOP_P', 'label' => 'Top-p', 'kind' => 'float', 'default' => 1.0, 'min' => 0.0, 'max' => 1.0, 'help' => 'Nucleus sampling (0.0–1.0)'],
             ['section' => 'model', 'order' => 60, 'key' => 'MAX_TOKENS', 'label' => 'Max Tokens', 'kind' => 'int', 'default' => 1200, 'min' => 1, 'help' => 'Token limit per call'],

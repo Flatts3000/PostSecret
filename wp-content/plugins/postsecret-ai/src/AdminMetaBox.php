@@ -147,8 +147,78 @@ final class AdminMetaBox
 
         // Error (if any)
         if ($err) {
-            echo '<p><strong>Error:</strong><br><code style="white-space:pre-wrap">' . esc_html($err) . '</code></p>';
+            echo '<p><strong>Error:</strong><br><code style="white-space:pre-wrap;background:#fee;padding:8px;display:block;border-radius:3px;">' . esc_html($err) . '</code></p>';
+
+            // Show link to debug logs if available
+            $debug_url = rest_url('psai/v1/debug-log?lines=100');
+            echo '<p style="margin-top:8px;"><a href="' . esc_url($debug_url) . '" target="_blank" class="button button-small">View Debug Logs</a></p>';
+
+            // Check if there's a transient error with more details
+            $transient_err = get_transient('_ps_last_embedding_error');
+            if ($transient_err && $transient_err !== $err) {
+                echo '<details style="margin-top:8px;"><summary style="cursor:pointer;color:#b32d2e;">Additional error details</summary>';
+                echo '<code style="white-space:pre-wrap;background:#fff4e6;padding:8px;display:block;border-radius:3px;margin-top:4px;">' . esc_html($transient_err) . '</code>';
+                echo '</details>';
+            }
         }
+
+        // Show Qdrant sync warning if embedding exists but Qdrant failed
+        $qdrant_err = get_transient('_ps_last_qdrant_error');
+        if ($embedding && $qdrant_err) {
+            echo '<p><strong>Qdrant Sync Warning:</strong><br>';
+            echo '<code style="white-space:pre-wrap;background:#fff4e6;padding:8px;display:block;border-radius:3px;">';
+            echo 'Embedding stored in MySQL but not synced to Qdrant: ' . esc_html($qdrant_err);
+            echo '</code></p>';
+        }
+
+        // Show diagnostic button for troubleshooting
+        $diag_url = rest_url('psai/v1/qdrant-status');
+        echo '<p style="margin-top:8px;">';
+        echo '<a href="' . esc_url($diag_url) . '" target="_blank" class="button button-small">Check Qdrant Status</a> ';
+
+        // Add "Initialize Qdrant" button
+        echo '<button type="button" class="button button-small psai-init-qdrant" style="margin-left:4px;">Initialize Qdrant Collection</button>';
+        echo '</p>';
+
+        // Add inline JavaScript for the button
+        echo '<script>
+        document.addEventListener("DOMContentLoaded", function() {
+            var btn = document.querySelector(".psai-init-qdrant");
+            if (btn) {
+                btn.addEventListener("click", function() {
+                    if (!confirm("Initialize Qdrant collection? This is safe to run multiple times.")) return;
+                    btn.disabled = true;
+                    btn.textContent = "Initializing...";
+
+                    fetch("' . esc_js(rest_url('psai/v1/qdrant-init')) . '", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-WP-Nonce": "' . esc_js(wp_create_nonce('wp_rest')) . '"
+                        }
+                    })
+                    .then(function(res) { return res.json(); })
+                    .then(function(data) {
+                        btn.disabled = false;
+                        if (data.success) {
+                            btn.textContent = "✓ Collection Initialized";
+                            btn.style.background = "#00a32a";
+                            btn.style.color = "#fff";
+                            alert("Qdrant collection initialized successfully!");
+                        } else {
+                            btn.textContent = "Initialize Qdrant Collection";
+                            alert("Error: " + (data.message || "Unknown error"));
+                        }
+                    })
+                    .catch(function(err) {
+                        btn.disabled = false;
+                        btn.textContent = "Initialize Qdrant Collection";
+                        alert("Request failed: " + err.message);
+                    });
+                });
+            }
+        });
+        </script>';
 
         // Raw JSON viewer
         if ($payload) {

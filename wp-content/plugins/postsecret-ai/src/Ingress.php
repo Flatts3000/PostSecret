@@ -249,8 +249,11 @@ function psai_make_data_url(int $att_id, int $maxDim = 1600, int $quality = 85):
     $editor->set_quality($quality);
 
     // Save temp JPEG → base64
-    $tmp = wp_tempnam('psai');
-    $tmpJpg = $tmp . '.jpg';
+    // Use WordPress temp dir, fallback to system temp
+    $tmpDir = function_exists('wp_tempnam')
+        ? dirname(wp_tempnam('psai'))
+        : (function_exists('get_temp_dir') ? get_temp_dir() : sys_get_temp_dir());
+    $tmpJpg = tempnam($tmpDir, 'psai_') . '.jpg';
     $saved = $editor->save($tmpJpg, 'image/jpeg');
     if (is_wp_error($saved) || empty($saved['path'])) {
         $raw = @file_get_contents($path);
