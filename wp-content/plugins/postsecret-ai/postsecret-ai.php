@@ -345,6 +345,8 @@ add_action('admin_post_psai_reclassify', function () {
         exit;
     }
 
+    $error_details = [];
+
     try {
         // If this is the back, flip to the front as canonical
         $maybePair = (int)get_post_meta($att, '_ps_pair_id', true);
@@ -365,13 +367,32 @@ add_action('admin_post_psai_reclassify', function () {
         \PSAI\psai_store_result($front_id, $payload, $model);
         \PSAI\AttachmentSync::sync_from_payload($front_id, $payload, null);
 
-        // Generate and store embedding
+        // Generate and store embedding with detailed error capture
         $embed_model = $env['EMBEDDING_MODEL'] ?? 'text-embedding-3-small';
-        \PSAI\EmbeddingService::generate_and_store($front_id, $payload, $api, $embed_model);
+        $embedding_ok = \PSAI\EmbeddingService::generate_and_store($front_id, $payload, $api, $embed_model);
+
+        if (!$embedding_ok) {
+            // Try to get detailed error from transient
+            $detailed_error = get_transient('_ps_last_embedding_error');
+            if ($detailed_error) {
+                $error_details[] = $detailed_error;
+            } else {
+                $error_details[] = 'Embedding generation failed - check API key and model configuration';
+            }
+        }
 
         // Normalize flags + recompute metadata
         \PSAI\Ingress::normalize_from_existing_payload($front_id);
         \PSAI\Metadata::compute_and_store($att);
+
+        // If embedding failed but classification succeeded, store partial error
+        if (!$embedding_ok) {
+            $err_msg = 'Classification succeeded but embedding generation failed. ' . implode('; ', $error_details);
+            psai_set_last_error($front_id, $err_msg);
+            $url = add_query_arg(['psai_msg' => 'partial_err'], get_edit_post_link($att, ''));
+            wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=partial_err'));
+            exit;
+        }
 
         psai_clear_last_error($front_id);
 
@@ -395,6 +416,8 @@ add_action('admin_notices', function () {
         echo '<div class="notice notice-success is-dismissible"><p>PostSecret AI: Attachment normalized.</p></div>';
     } elseif ($msg === 'reclassified') {
         echo '<div class="notice notice-success is-dismissible"><p>PostSecret AI: Attachment re-classified with latest AI model and prompt.</p></div>';
+    } elseif ($msg === 'partial_err') {
+        echo '<div class="notice notice-warning is-dismissible"><p>PostSecret AI: Classification completed but embedding generation failed. Check the meta box for details.</p></div>';
     } elseif ($msg === 'err') {
         echo '<div class="notice notice-error is-dismissible"><p>PostSecret AI: There was an error. See the meta box for details.</p></div>';
     } elseif ($msg === 'bad_id') {

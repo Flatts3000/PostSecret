@@ -39,16 +39,27 @@ final class EmbeddingService
             // If API key wasn't supplied, use settings.
             if ($api_key === '') {
                 $api_key = (string)self::opt('API_KEY', '');
+                if ($api_key === '') {
+                    $msg = 'Embedding failed: OpenAI API key not configured in settings';
+                    error_log("[EmbeddingService] {$msg} for secret {$secret_id}");
+                    psai_set_last_error($secret_id, $msg);
+                    return false;
+                }
             }
 
             $input = self::build_embedding_input($payload);
             if ($input === '') {
-                error_log("[EmbeddingService] Empty embedding input for secret {$secret_id}; skipping.");
+                $msg = 'Embedding failed: Empty input (no topics/feelings/text extracted)';
+                error_log("[EmbeddingService] {$msg} for secret {$secret_id}");
+                psai_set_last_error($secret_id, $msg);
                 return false;
             }
 
             $embedding = self::generate_embedding($api_key, $model, $input);
             if ($embedding === null) {
+                $msg = 'Embedding failed: OpenAI API call returned no data (check API key, quota, and network)';
+                error_log("[EmbeddingService] {$msg} for secret {$secret_id}");
+                psai_set_last_error($secret_id, $msg);
                 return false;
             }
 
@@ -57,6 +68,9 @@ final class EmbeddingService
             // Canonical: store in MySQL
             $ok = self::store_embedding($secret_id, $model, $embedding, $payload);
             if (!$ok) {
+                $msg = 'Embedding failed: Database storage error';
+                error_log("[EmbeddingService] {$msg} for secret {$secret_id}");
+                psai_set_last_error($secret_id, $msg);
                 return false;
             }
 
@@ -72,14 +86,20 @@ final class EmbeddingService
                 /** @var array $qdrantPayload */
                 $qdrantPayload = apply_filters('psai/embedding/qdrant-payload', $qdrantPayload, $secret_id, $payload);
 
-                self::qdrant_upsert($secret_id, $model, $embedding, $qdrantPayload);
+                $qdrant_ok = self::qdrant_upsert($secret_id, $model, $embedding, $qdrantPayload);
+                if (!$qdrant_ok) {
+                    // Non-fatal - Qdrant is best-effort, but log it
+                    error_log("[EmbeddingService] Qdrant upsert failed for secret {$secret_id} (non-fatal)");
+                }
             }
 
             do_action('psai/embedding/saved', $secret_id, $model, $embedding, $payload);
             return true;
 
         } catch (\Throwable $e) {
-            error_log('[EmbeddingService] Error for secret ' . $secret_id . ': ' . $e->getMessage());
+            $msg = 'Embedding exception: ' . $e->getMessage();
+            error_log('[EmbeddingService] Error for secret ' . $secret_id . ': ' . $msg);
+            psai_set_last_error($secret_id, substr($msg, 0, 500));
             do_action('psai/embedding/error', $secret_id, $e);
             return false;
         }
@@ -182,7 +202,10 @@ final class EmbeddingService
         $res = wp_remote_post(self::openai_embeddings_url(), $args);
 
         if (is_wp_error($res)) {
-            error_log('[EmbeddingService] Embedding API error: ' . $res->get_error_message());
+            $err_msg = $res->get_error_message();
+            error_log('[EmbeddingService] Embedding API WP_Error: ' . $err_msg);
+            // Store the network/timeout error
+            set_transient('_ps_last_embedding_error', 'Network error: ' . $err_msg, 300);
             return null;
         }
 
@@ -191,6 +214,12 @@ final class EmbeddingService
 
         if ($code >= 300) {
             error_log('[EmbeddingService] Embedding API HTTP ' . $code . ': ' . substr($raw, 0, 600));
+
+            // Try to parse OpenAI error message
+            $json = json_decode($raw, true);
+            $openai_error = $json['error']['message'] ?? 'Unknown API error';
+            $err_msg = "OpenAI API HTTP {$code}: {$openai_error}";
+            set_transient('_ps_last_embedding_error', $err_msg, 300);
             return null;
         }
 
@@ -199,6 +228,7 @@ final class EmbeddingService
 
         if (!is_array($embedding) || $embedding === []) {
             error_log('[EmbeddingService] Invalid embedding response: ' . substr($raw, 0, 300));
+            set_transient('_ps_last_embedding_error', 'Invalid API response: missing embedding data', 300);
             return null;
         }
 
@@ -209,6 +239,9 @@ final class EmbeddingService
                 $model, $expected, count($embedding)
             ));
         }
+
+        // Clear any previous error on success
+        delete_transient('_ps_last_embedding_error');
 
         /** @var array<int,float> $embedding */
         return array_map(static fn($v) => (float)$v, $embedding);

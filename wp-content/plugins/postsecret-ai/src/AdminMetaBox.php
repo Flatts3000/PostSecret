@@ -147,7 +147,11 @@ final class AdminMetaBox
 
         // Error (if any)
         if ($err) {
-            echo '<p><strong>Error:</strong><br><code style="white-space:pre-wrap">' . esc_html($err) . '</code></p>';
+            echo '<p><strong>Error:</strong><br><code style="white-space:pre-wrap;background:#fee;padding:8px;display:block;border-radius:3px;">' . esc_html($err) . '</code></p>';
+
+            // Show link to debug logs if available
+            $debug_url = rest_url('psai/v1/debug-log?lines=100');
+            echo '<p style="margin-top:8px;"><a href="' . esc_url($debug_url) . '" target="_blank" class="button button-small">View Debug Logs</a></p>';
         }
 
         // Raw JSON viewer
