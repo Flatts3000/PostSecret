@@ -352,10 +352,12 @@ final class EmbeddingService
         $cache_key = "psai_qdrant_has_{$collection}";
         if (get_transient($cache_key)) return;
 
+        error_log("[EmbeddingService] Checking if Qdrant collection '{$collection}' exists...");
         $exists = self::qdrant_request('GET', "/collections/{$collection}", null, 5);
         $ok = is_array($exists) && (($exists['status'] ?? '') === 'ok');
 
         if (!$ok) {
+            error_log("[EmbeddingService] Collection '{$collection}' not found, creating with dimension {$dim}...");
             $create = [
                 'vectors' => [
                     'size' => $dim,
@@ -370,7 +372,21 @@ final class EmbeddingService
                     'indexing_threshold' => 0,  // index immediately (dev-friendly)
                 ],
             ];
-            self::qdrant_request('PUT', "/collections/{$collection}", $create, 20);
+            $result = self::qdrant_request('PUT', "/collections/{$collection}", $create, 20);
+
+            if ($result === null) {
+                error_log("[EmbeddingService] Failed to create collection '{$collection}'");
+                set_transient('_ps_last_qdrant_error', "Failed to create collection '{$collection}'", 300);
+                return; // Don't cache failure
+            }
+
+            if (($result['result'] ?? false) === true || ($result['status'] ?? '') === 'ok') {
+                error_log("[EmbeddingService] Successfully created collection '{$collection}'");
+            } else {
+                error_log("[EmbeddingService] Unexpected response when creating collection: " . wp_json_encode($result));
+            }
+        } else {
+            error_log("[EmbeddingService] Collection '{$collection}' already exists");
         }
 
         set_transient($cache_key, 1, HOUR_IN_SECONDS);

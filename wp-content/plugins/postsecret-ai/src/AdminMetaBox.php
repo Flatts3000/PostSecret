@@ -173,7 +173,52 @@ final class AdminMetaBox
 
         // Show diagnostic button for troubleshooting
         $diag_url = rest_url('psai/v1/qdrant-status');
-        echo '<p style="margin-top:8px;"><a href="' . esc_url($diag_url) . '" target="_blank" class="button button-small">Check Qdrant Status</a></p>';
+        echo '<p style="margin-top:8px;">';
+        echo '<a href="' . esc_url($diag_url) . '" target="_blank" class="button button-small">Check Qdrant Status</a> ';
+
+        // Add "Initialize Qdrant" button
+        echo '<button type="button" class="button button-small psai-init-qdrant" style="margin-left:4px;">Initialize Qdrant Collection</button>';
+        echo '</p>';
+
+        // Add inline JavaScript for the button
+        echo '<script>
+        document.addEventListener("DOMContentLoaded", function() {
+            var btn = document.querySelector(".psai-init-qdrant");
+            if (btn) {
+                btn.addEventListener("click", function() {
+                    if (!confirm("Initialize Qdrant collection? This is safe to run multiple times.")) return;
+                    btn.disabled = true;
+                    btn.textContent = "Initializing...";
+
+                    fetch("' . esc_js(rest_url('psai/v1/qdrant-init')) . '", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-WP-Nonce": "' . esc_js(wp_create_nonce('wp_rest')) . '"
+                        }
+                    })
+                    .then(function(res) { return res.json(); })
+                    .then(function(data) {
+                        btn.disabled = false;
+                        if (data.success) {
+                            btn.textContent = "✓ Collection Initialized";
+                            btn.style.background = "#00a32a";
+                            btn.style.color = "#fff";
+                            alert("Qdrant collection initialized successfully!");
+                        } else {
+                            btn.textContent = "Initialize Qdrant Collection";
+                            alert("Error: " + (data.message || "Unknown error"));
+                        }
+                    })
+                    .catch(function(err) {
+                        btn.disabled = false;
+                        btn.textContent = "Initialize Qdrant Collection";
+                        alert("Request failed: " + err.message);
+                    });
+                });
+            }
+        });
+        </script>';
 
         // Raw JSON viewer
         if ($payload) {

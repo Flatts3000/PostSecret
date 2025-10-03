@@ -38,6 +38,59 @@ function register_rest_routes()
         },
     ]);
 
+    // Connection test endpoint (bypasses Qdrant completely)
+    register_rest_route('psai/v1', '/test-connection', [
+        'methods' => 'GET',
+        'permission_callback' => function () {
+            return is_user_logged_in() && current_user_can('upload_files');
+        },
+        'callback' => function () {
+            $qdrant_url = (string)opt('QDRANT_URL', '');
+            if ($qdrant_url === '') {
+                $qdrant_url = getenv('PS_QDRANT_URL') ?: (defined('PS_QDRANT_URL') ? constant('PS_QDRANT_URL') : '');
+            }
+
+            $results = [
+                'qdrant_url' => $qdrant_url,
+                'tests' => [],
+            ];
+
+            // Test 1: Basic connectivity
+            $test_url = rtrim($qdrant_url, '/') . '/';
+            $response = wp_remote_get($test_url, ['timeout' => 10, 'sslverify' => false]);
+            $results['tests']['root'] = [
+                'url' => $test_url,
+                'is_error' => is_wp_error($response),
+                'error' => is_wp_error($response) ? $response->get_error_message() : null,
+                'code' => is_wp_error($response) ? null : wp_remote_retrieve_response_code($response),
+                'body' => is_wp_error($response) ? null : substr(wp_remote_retrieve_body($response), 0, 500),
+            ];
+
+            // Test 2: Collections endpoint (with API key)
+            $test_url = rtrim($qdrant_url, '/') . '/collections';
+            $headers = ['Content-Type' => 'application/json'];
+            $api_key = (string)opt('QDRANT_API_KEY', '');
+            if ($api_key === '') {
+                $api_key = getenv('PS_QDRANT_API_KEY') ?: (defined('PS_QDRANT_API_KEY') ? constant('PS_QDRANT_API_KEY') : '');
+            }
+            if ($api_key !== '') {
+                $headers['api-key'] = $api_key;
+            }
+
+            $response = wp_remote_get($test_url, ['timeout' => 10, 'headers' => $headers, 'sslverify' => false]);
+            $results['tests']['collections'] = [
+                'url' => $test_url,
+                'has_api_key' => $api_key !== '',
+                'is_error' => is_wp_error($response),
+                'error' => is_wp_error($response) ? $response->get_error_message() : null,
+                'code' => is_wp_error($response) ? null : wp_remote_retrieve_response_code($response),
+                'body' => is_wp_error($response) ? null : substr(wp_remote_retrieve_body($response), 0, 500),
+            ];
+
+            return new WP_REST_Response($results, 200);
+        },
+    ]);
+
     // IP detection endpoint
     register_rest_route('psai/v1', '/my-ip', [
         'methods' => 'GET',
@@ -60,6 +113,46 @@ function register_rest_routes()
                 'external_ip' => $external_ip,
                 'http_x_forwarded_for' => $_SERVER['HTTP_X_FORWARDED_FOR'] ?? 'not set',
             ], 200);
+        },
+    ]);
+
+    // Initialize Qdrant collection
+    register_rest_route('psai/v1', '/qdrant-init', [
+        'methods' => 'POST',
+        'permission_callback' => function () {
+            return is_user_logged_in() && current_user_can('manage_options');
+        },
+        'callback' => function () {
+            if (!class_exists('PSAI\\EmbeddingService')) {
+                return new WP_Error('missing_service', 'EmbeddingService not available', ['status' => 500]);
+            }
+
+            // Use reflection to call private method
+            try {
+                $model = 'text-embedding-3-small';
+                $collection = 'secrets_text_embedding_3_small'; // From settings
+                $dim = 1536; // text-embedding-3-small dimension
+
+                // Clear any cached "collection exists" transient to force re-check
+                delete_transient("psai_qdrant_has_{$collection}");
+
+                // Try to trigger collection creation by calling the public method
+                // We'll create a dummy embedding to trigger the collection creation
+                $reflection = new \ReflectionClass('PSAI\\EmbeddingService');
+                $method = $reflection->getMethod('qdrant_ensure_collection');
+                $method->setAccessible(true);
+                $method->invokeArgs(null, [$collection, $dim]);
+
+                return new WP_REST_Response([
+                    'success' => true,
+                    'message' => "Attempted to initialize collection '{$collection}' with dimension {$dim}",
+                    'collection' => $collection,
+                    'dimension' => $dim,
+                ], 200);
+
+            } catch (\Exception $e) {
+                return new WP_Error('init_failed', $e->getMessage(), ['status' => 500]);
+            }
         },
     ]);
 
