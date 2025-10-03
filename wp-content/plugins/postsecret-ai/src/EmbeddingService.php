@@ -311,11 +311,12 @@ final class EmbeddingService
 
     /**
      * Upsert a single point into Qdrant (best-effort).
+     * @return bool True if upsert succeeded, false otherwise
      */
-    private static function qdrant_upsert(int $secret_id, string $model, array $vector, array $payload = []): void
+    private static function qdrant_upsert(int $secret_id, string $model, array $vector, array $payload = []): bool
     {
         $base = self::qdrant_url();
-        if ($base === null) return;
+        if ($base === null) return false;
 
         // Ensure collection exists (cached)
         $collection = self::qdrant_collection($model);
@@ -332,7 +333,8 @@ final class EmbeddingService
             ]],
         ];
 
-        self::qdrant_request('PUT', "/collections/{$collection}/points?wait=true", $body, self::qdrant_timeout_seconds());
+        $result = self::qdrant_request('PUT', "/collections/{$collection}/points?wait=true", $body, self::qdrant_timeout_seconds());
+        return $result !== null && ($result['status'] ?? '') === 'ok';
     }
 
     /**
@@ -569,6 +571,42 @@ final class EmbeddingService
     {
         $s = preg_replace('/\s+/u', ' ', $s ?? '') ?? '';
         return trim($s);
+    }
+
+    /**
+     * Build embedding input text from classification payload.
+     * Combines topics, feelings, meanings, and extracted text into a single string.
+     */
+    private static function build_embedding_input(array $payload): string
+    {
+        $parts = [];
+
+        // Add description/secret text
+        if (!empty($payload['secret'])) {
+            $parts[] = 'Secret: ' . self::sanitize_space((string)$payload['secret']);
+        }
+
+        // Add topics
+        if (!empty($payload['topics']) && is_array($payload['topics'])) {
+            $parts[] = 'Topics: ' . implode(', ', array_map('self::sanitize_space', $payload['topics']));
+        }
+
+        // Add feelings
+        if (!empty($payload['feelings']) && is_array($payload['feelings'])) {
+            $parts[] = 'Feelings: ' . implode(', ', array_map('self::sanitize_space', $payload['feelings']));
+        }
+
+        // Add meanings
+        if (!empty($payload['meanings']) && is_array($payload['meanings'])) {
+            $parts[] = 'Meanings: ' . implode(', ', array_map('self::sanitize_space', $payload['meanings']));
+        }
+
+        // Add extracted text if available
+        if (!empty($payload['text'])) {
+            $parts[] = 'Text: ' . self::sanitize_space((string)$payload['text']);
+        }
+
+        return implode('. ', $parts);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
