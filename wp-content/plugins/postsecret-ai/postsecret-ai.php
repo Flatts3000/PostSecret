@@ -1,12 +1,17 @@
 <?php
 /**
  * Plugin Name: PostSecret AI (Ultra-MVP)
- * Description: Admin-only tools for classification: test console + single postcard uploader.
- * Version: 0.0.5
+ * Description: Admin-only tools for classification: test console, single uploader, and bulk uploader.
+ * Version: 0.0.6
+ *
+ * SETUP:
+ * - Bulk upload requires database tables. Run migrations from postsecret-admin plugin:
+ *   Visit: /wp-content/plugins/postsecret-admin/run-migrations.php
  */
 if (!defined('ABSPATH')) exit;
 
 define('PSAI_SLUG', 'postsecret-ai');
+define('PSAI_VERSION', '0.0.6');
 
 // Core
 require __DIR__ . '/src/Prompt.php';
@@ -21,10 +26,14 @@ require __DIR__ . '/src/Metadata.php';
 require __DIR__ . '/src/AttachmentSync.php';
 require __DIR__ . '/src/Ingress.php';
 
+// Bulk Upload
+require __DIR__ . '/src/BulkJobService.php';
+
 // Admin
 require __DIR__ . '/src/Settings.php';
 require __DIR__ . '/src/AdminPage.php';
 require __DIR__ . '/src/AdminSingleUpload.php';
+require __DIR__ . '/src/AdminBulkUpload.php';
 require __DIR__ . '/src/AdminMetaBox.php';
 
 /* ---------------------------------------------------------------------------
@@ -106,11 +115,9 @@ add_action('admin_menu', function () {
         'psai_postcards',
         'Bulk Upload',
         'Bulk Upload',
-        'upload_files',
+        'manage_options',
         'psai_bulk_upload',
-        function () {
-            echo '<div class="wrap"><h1>Bulk Upload</h1><p>Bulk upload interface coming soon.</p></div>';
-        }
+        ['PSAI\\AdminBulkUpload', 'render']
     );
 });
 
@@ -357,4 +364,237 @@ add_action('rest_api_init', function () {
             return new \WP_REST_Response(['exists' => true, 'lines' => $lines], 200);
         },
     ]);
+});
+
+/* ---------------------------------------------------------------------------
+ * Bulk Upload AJAX Endpoints
+ * ------------------------------------------------------------------------- */
+
+// List jobs
+add_action('wp_ajax_psai_bulk_list_jobs', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $jobs = \PSAI\BulkJobService::list_jobs(50);
+
+    // Format for display
+    $formatted = array_map(function($job) {
+        return [
+            'id' => (int)$job['id'],
+            'uuid' => $job['uuid'],
+            'status' => $job['status'],
+            'source' => $job['source'],
+            'total' => (int)$job['total_items'],
+            'processed' => (int)$job['processed_items'],
+            'success_count' => (int)$job['success_count'],
+            'fail_count' => (int)$job['fail_count'],
+            'last_error' => $job['last_error'] ? substr($job['last_error'], 0, 100) : null,
+            'created' => wp_date('Y-m-d H:i', strtotime($job['created_at'])),
+        ];
+    }, $jobs);
+
+    wp_send_json_success(['jobs' => $formatted]);
+});
+
+// Get job detail
+add_action('wp_ajax_psai_bulk_get_job', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_REQUEST['job_id']) ? (int)$_REQUEST['job_id'] : 0;
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $job = \PSAI\BulkJobService::get_job($job_id);
+    if (!$job) wp_send_json_error('Job not found');
+
+    wp_send_json_success([
+        'id' => (int)$job['id'],
+        'uuid' => $job['uuid'],
+        'status' => $job['status'],
+        'source' => $job['source'],
+        'staging_path' => $job['staging_path'],
+        'total' => (int)$job['total_items'],
+        'processed' => (int)$job['processed_items'],
+        'success_count' => (int)$job['success_count'],
+        'fail_count' => (int)$job['fail_count'],
+        'started_at' => $job['started_at'],
+        'created_at' => $job['created_at'],
+        'updated_at' => $job['updated_at'],
+    ]);
+});
+
+// Start job
+add_action('wp_ajax_psai_bulk_start_job', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $result = \PSAI\BulkJobService::update_job_status($job_id, \PSAI\BulkJobService::STATUS_RUNNING);
+    if ($result) {
+        wp_send_json_success();
+    } else {
+        wp_send_json_error('Failed to start job');
+    }
+});
+
+// Pause job
+add_action('wp_ajax_psai_bulk_pause_job', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $result = \PSAI\BulkJobService::update_job_status($job_id, \PSAI\BulkJobService::STATUS_PAUSED);
+    if ($result) {
+        wp_send_json_success();
+    } else {
+        wp_send_json_error('Failed to pause job');
+    }
+});
+
+// Stop job
+add_action('wp_ajax_psai_bulk_stop_job', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $result = \PSAI\BulkJobService::update_job_status($job_id, \PSAI\BulkJobService::STATUS_STOPPED);
+    if ($result) {
+        wp_send_json_success();
+    } else {
+        wp_send_json_error('Failed to stop job');
+    }
+});
+
+// Process batch (step)
+add_action('wp_ajax_psai_bulk_step', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    $batch_size = isset($_POST['batch_size']) ? (int)$_POST['batch_size'] : 25;
+
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $result = \PSAI\BulkJobService::process_batch($job_id, $batch_size);
+    wp_send_json_success($result);
+});
+
+// Retry failed items
+add_action('wp_ajax_psai_bulk_retry_failed', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $count = \PSAI\BulkJobService::retry_failed($job_id);
+    wp_send_json_success(['requeued' => $count]);
+});
+
+// Delete job
+add_action('wp_ajax_psai_bulk_delete_job', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $result = \PSAI\BulkJobService::delete_job($job_id);
+    if ($result) {
+        wp_send_json_success();
+    } else {
+        wp_send_json_error('Failed to delete job');
+    }
+});
+
+// Get errors
+add_action('wp_ajax_psai_bulk_get_errors', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_REQUEST['job_id']) ? (int)$_REQUEST['job_id'] : 0;
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $errors = \PSAI\BulkJobService::get_errors($job_id, 100);
+
+    $formatted = array_map(function($error) {
+        return [
+            'id' => (int)$error['id'],
+            'file_path' => $error['file_path'],
+            'status' => $error['status'],
+            'attempts' => (int)$error['attempts'],
+            'last_error' => $error['last_error'],
+            'updated_at' => wp_date('Y-m-d H:i:s', strtotime($error['updated_at'])),
+        ];
+    }, $errors);
+
+    wp_send_json_success(['errors' => $formatted]);
+});
+
+// Save job settings
+add_action('wp_ajax_psai_bulk_save_settings', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    $settings = isset($_POST['settings']) ? (array)$_POST['settings'] : [];
+
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $result = \PSAI\BulkJobService::save_settings($job_id, $settings);
+    if ($result) {
+        wp_send_json_success();
+    } else {
+        wp_send_json_error('Failed to save settings');
+    }
+});
+
+// Export errors CSV
+add_action('wp_ajax_psai_bulk_export_errors', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_REQUEST['job_id']) ? (int)$_REQUEST['job_id'] : 0;
+    if (!$job_id) wp_die('Invalid job ID');
+
+    $csv = \PSAI\BulkJobService::export_errors_csv($job_id);
+
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename=psai-bulk-errors-' . $job_id . '.csv');
+    echo $csv;
+    exit;
+});
+
+// Create job (file upload)
+add_action('admin_post_psai_bulk_create_job', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+    check_admin_referer('psai_bulk_create_job', 'psai_bulk_nonce');
+
+    $result = \PSAI\BulkJobService::create_job($_FILES);
+
+    if ($result['success']) {
+        wp_redirect(add_query_arg([
+            'page' => 'psai_bulk_upload',
+            'psai_msg' => 'job_created',
+            'job_id' => $result['job_id']
+        ], admin_url('admin.php')));
+    } else {
+        set_transient('_ps_bulk_error', $result['error'], 300);
+        wp_redirect(add_query_arg([
+            'page' => 'psai_bulk_upload',
+            'psai_msg' => 'err'
+        ], admin_url('admin.php')));
+    }
+    exit;
+});
+
+// Admin notices for bulk upload
+add_action('admin_notices', function() {
+    if (!isset($_GET['page']) || $_GET['page'] !== 'psai_bulk_upload') return;
+    if (!isset($_GET['psai_msg'])) return;
+
+    $msg = sanitize_text_field($_GET['psai_msg']);
+
+    if ($msg === 'job_created') {
+        echo '<div class="notice notice-success is-dismissible"><p>Job created successfully! Click "Open" to start processing.</p></div>';
+    } elseif ($msg === 'err') {
+        $error = get_transient('_ps_bulk_error');
+        delete_transient('_ps_bulk_error');
+        echo '<div class="notice notice-error is-dismissible"><p>Error: ' . esc_html($error ?: 'Unknown error') . '</p></div>';
+    }
 });

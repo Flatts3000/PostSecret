@@ -5,7 +5,8 @@
       "Bash(docker logs:*)",
       "Bash(docker-compose:*)",
       "Bash(docker volume rm:*)",
-      "Bash(composer install:*)"
+      "Bash(composer install:*)",
+      "Bash(php:*)"
     ],
     "deny": [],
     "ask": []
