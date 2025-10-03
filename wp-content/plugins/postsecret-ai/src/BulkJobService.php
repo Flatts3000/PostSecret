@@ -50,9 +50,13 @@ final class BulkJobService
     {
         global $wpdb;
 
-        if (empty($files['psai_bulk_files'])) {
-            return ['success' => false, 'error' => 'No files uploaded.'];
-        }
+        try {
+            if (empty($files['psai_bulk_files'])) {
+                return ['success' => false, 'error' => 'No files uploaded.'];
+            }
+
+            error_log('PSAI Bulk: Starting job creation');
+            error_log('PSAI Bulk: Files structure: ' . print_r($files['psai_bulk_files'], true));
 
         // Create staging directory
         $upload_dir = wp_upload_dir();
@@ -182,7 +186,15 @@ final class BulkJobService
             ]);
         }
 
-        return ['success' => true, 'job_id' => $job_id];
+            error_log('PSAI Bulk: Job created successfully - ID: ' . $job_id);
+            return ['success' => true, 'job_id' => $job_id];
+
+        } catch (\Throwable $e) {
+            $error_msg = 'Job creation failed: ' . $e->getMessage();
+            error_log('PSAI Bulk Error: ' . $error_msg);
+            error_log('PSAI Bulk Trace: ' . $e->getTraceAsString());
+            return ['success' => false, 'error' => $error_msg];
+        }
     }
 
     /**

@@ -562,25 +562,65 @@ add_action('wp_ajax_psai_bulk_export_errors', function() {
 
 // Create job (file upload)
 add_action('admin_post_psai_bulk_create_job', function() {
-    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
-    check_admin_referer('psai_bulk_create_job', 'psai_bulk_nonce');
+    try {
+        error_log('PSAI Bulk: Handler called');
 
-    $result = \PSAI\BulkJobService::create_job($_FILES);
+        if (!current_user_can('manage_options')) {
+            error_log('PSAI Bulk: Unauthorized user');
+            wp_die('Unauthorized', 403);
+        }
 
-    if ($result['success']) {
-        wp_redirect(add_query_arg([
-            'page' => 'psai_bulk_upload',
-            'psai_msg' => 'job_created',
-            'job_id' => $result['job_id']
-        ], admin_url('admin.php')));
-    } else {
-        set_transient('_ps_bulk_error', $result['error'], 300);
+        error_log('PSAI Bulk: Checking nonce');
+        check_admin_referer('psai_bulk_create_job', 'psai_bulk_nonce');
+
+        // Check if tables exist first
+        global $wpdb;
+        $table_jobs = $wpdb->prefix . 'psai_bulk_jobs';
+        $tables_exist = $wpdb->get_var("SHOW TABLES LIKE '{$table_jobs}'") === $table_jobs;
+
+        error_log('PSAI Bulk: Tables exist: ' . ($tables_exist ? 'yes' : 'no'));
+
+        if (!$tables_exist) {
+            set_transient('_ps_bulk_error', 'Database tables not found. Please run migrations first.', 300);
+            wp_redirect(add_query_arg([
+                'page' => 'psai_bulk_upload',
+                'psai_msg' => 'err'
+            ], admin_url('admin.php')));
+            exit;
+        }
+
+        // Debug: Log the $_FILES array
+        error_log('PSAI Bulk Upload - $_FILES: ' . print_r($_FILES, true));
+
+        $result = \PSAI\BulkJobService::create_job($_FILES);
+
+        // Debug: Log the result
+        error_log('PSAI Bulk Upload - Result: ' . print_r($result, true));
+
+        if ($result['success']) {
+            wp_redirect(add_query_arg([
+                'page' => 'psai_bulk_upload',
+                'psai_msg' => 'job_created',
+                'job_id' => $result['job_id']
+            ], admin_url('admin.php')));
+        } else {
+            set_transient('_ps_bulk_error', $result['error'], 300);
+            wp_redirect(add_query_arg([
+                'page' => 'psai_bulk_upload',
+                'psai_msg' => 'err'
+            ], admin_url('admin.php')));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        error_log('PSAI Bulk FATAL ERROR: ' . $e->getMessage());
+        error_log('PSAI Bulk FATAL TRACE: ' . $e->getTraceAsString());
+        set_transient('_ps_bulk_error', 'Fatal error: ' . $e->getMessage(), 300);
         wp_redirect(add_query_arg([
             'page' => 'psai_bulk_upload',
             'psai_msg' => 'err'
         ], admin_url('admin.php')));
+        exit;
     }
-    exit;
 });
 
 // Admin notices for bulk upload

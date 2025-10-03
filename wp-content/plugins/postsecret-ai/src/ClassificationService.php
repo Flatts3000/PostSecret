@@ -79,7 +79,7 @@ final class ClassificationService
                 psai_store_result($front_id, $payload, $model);
 
                 // Sync media fields (Alt/Caption/Description)
-                AttachmentSync::sync_from_payload($front_id, $payload, $back_id);
+                AttachmentSync::sync_from_payload($front_id, $payload, $back_id, $force);
 
                 // Generate and store embedding
                 $embedding_ok = EmbeddingService::generate_and_store($front_id, $payload, $api, $embed_model);
@@ -117,6 +117,14 @@ final class ClassificationService
                 $rs = get_post_meta($front_id, '_ps_review_status', true);
                 update_post_meta($back_id, '_ps_review_status', $rs);
                 update_post_meta($back_id, '_ps_is_vetted', $rs === 'auto_vetted' ? '1' : '0');
+            }
+
+            // Convert to WebP after classification (so AI sees original format)
+            if (get_post_meta($front_id, '_ps_needs_webp_conversion', true)) {
+                Ingress::convert_to_webp($front_id);
+            }
+            if ($back_id && get_post_meta($back_id, '_ps_needs_webp_conversion', true)) {
+                Ingress::convert_to_webp($back_id);
             }
 
             // Clear any previous errors on success

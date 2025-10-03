@@ -25,6 +25,7 @@ services:
         @ini_set('post_max_size', '128M');
     volumes:
       - ./wp-content:/var/www/html/wp-content
+      - ./php-uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
       - wordpress_data:/var/www/html
     depends_on:
       db:

@@ -33,6 +33,11 @@ final class AdminBulkUpload
             wp_die(__('You do not have sufficient permissions to access this page.', 'postsecret-ai'));
         }
 
+        // Check if database tables exist
+        global $wpdb;
+        $table_jobs = $wpdb->prefix . 'psai_bulk_jobs';
+        $tables_exist = $wpdb->get_var("SHOW TABLES LIKE '{$table_jobs}'") === $table_jobs;
+
         $plugin_version = defined('PSAI_VERSION') ? PSAI_VERSION : '0.0.5';
         $prompt_version = Prompt::VERSION ?? 'unknown';
         $env = get_option(Settings::OPTION, Settings::defaults());
@@ -46,11 +51,29 @@ final class AdminBulkUpload
                 <?php esc_html_e('Upload a ZIP or images; then manually Start/Pause/Stop processing.', 'postsecret-ai'); ?>
             </p>
 
+            <?php if (!$tables_exist): ?>
+                <div class="notice notice-error">
+                    <p>
+                        <strong><?php esc_html_e('Database tables not found!', 'postsecret-ai'); ?></strong>
+                        <?php esc_html_e('You need to run migrations before using bulk upload.', 'postsecret-ai'); ?>
+                    </p>
+                    <p>
+                        <a href="<?php echo esc_url(plugins_url('postsecret-admin/run-migrations.php')); ?>" class="button button-primary">
+                            <?php esc_html_e('Run Migrations Now', 'postsecret-ai'); ?>
+                        </a>
+                        <a href="<?php echo esc_url(plugins_url('postsecret-ai/check-bulk-setup.php')); ?>" class="button">
+                            <?php esc_html_e('Check Setup Status', 'postsecret-ai'); ?>
+                        </a>
+                    </p>
+                </div>
+            <?php endif; ?>
+
             <!-- Upload Box -->
             <div class="psai-upload-box card">
                 <h2><?php esc_html_e('Create New Job', 'postsecret-ai'); ?></h2>
 
-                <form id="psai-bulk-upload-form" method="post" enctype="multipart/form-data">
+                <form id="psai-bulk-upload-form" method="post" enctype="multipart/form-data" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                    <input type="hidden" name="action" value="psai_bulk_create_job" />
                     <?php wp_nonce_field('psai_bulk_create_job', 'psai_bulk_nonce'); ?>
 
                     <div class="psai-dropzone" id="psai-dropzone">
@@ -86,7 +109,7 @@ final class AdminBulkUpload
             <div class="psai-job-list card">
                 <h2><?php esc_html_e('Recent Jobs', 'postsecret-ai'); ?></h2>
                 <div id="psai-jobs-container">
-                    <table class="wp-list-table widefat fixed striped" id="psai-jobs-table">
+                    <table class="wp-list-table widefat striped" id="psai-jobs-table">
                         <thead>
                             <tr>
                                 <th><?php esc_html_e('Job ID', 'postsecret-ai'); ?></th>
@@ -292,8 +315,9 @@ final class AdminBulkUpload
         </div>
 
         <style>
-            .psai-bulk-upload { max-width: 1400px; }
+            .psai-bulk-upload { max-width: 100%; }
             .psai-bulk-upload .card { padding: 20px; margin: 20px 0; background: #fff; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04); }
+            .psai-upload-box { max-width: 800px; }
 
             /* Upload Box */
             .psai-dropzone { border: 2px dashed #ccd0d4; border-radius: 4px; padding: 40px; text-align: center; background: #f9f9f9; cursor: pointer; transition: all 0.3s; }
@@ -305,6 +329,12 @@ final class AdminBulkUpload
             .psai-file-item { padding: 8px; border-bottom: 1px solid #f0f0f1; }
 
             /* Job List */
+            .psai-job-list { max-width: none !important; }
+            #psai-jobs-table { table-layout: auto; width: 100%; }
+            #psai-jobs-table th,
+            #psai-jobs-table td { white-space: nowrap; padding: 8px 12px; }
+            #psai-jobs-table th:nth-child(9),
+            #psai-jobs-table td:nth-child(9) { white-space: normal; max-width: 300px; word-wrap: break-word; }
             .psai-empty-state { text-align: center; padding: 40px; color: #646970; }
             .psai-status-pill { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
             .psai-status-pill.new { background: #f0f0f1; color: #1d2327; }
