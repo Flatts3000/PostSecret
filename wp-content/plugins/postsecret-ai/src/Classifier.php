@@ -96,9 +96,9 @@ final class Classifier
             $headers['OpenAI-Project'] = (string)$opts['OPENAI_PROJECT'];
         }
 
-        // ── Messages
+        // ── Messages (use custom prompt if configured, else built-in)
         $messages = [
-            ['role' => 'system', 'content' => Prompt::TEXT],
+            ['role' => 'system', 'content' => Prompt::get()],
             ['role' => 'user', 'content' => self::buildVisionContent($frontUrl, $backUrl, $detail)],
         ];
 

@@ -35,6 +35,7 @@ require __DIR__ . '/src/AdminPage.php';
 require __DIR__ . '/src/AdminSingleUpload.php';
 require __DIR__ . '/src/AdminBulkUpload.php';
 require __DIR__ . '/src/AdminMetaBox.php';
+require __DIR__ . '/src/AdminPromptEditor.php';
 
 /* ---------------------------------------------------------------------------
  * Small helpers: set/clear last error consistently on attachments
@@ -118,6 +119,15 @@ add_action('admin_menu', function () {
         'manage_options',
         'psai_bulk_upload',
         ['PSAI\\AdminBulkUpload', 'render']
+    );
+
+    add_submenu_page(
+        'psai_postcards',
+        'Prompt Editor',
+        'Prompt Editor',
+        'manage_options',
+        'psai_prompt_editor',
+        ['PSAI\\AdminPromptEditor', 'render']
     );
 });
 
@@ -637,4 +647,49 @@ add_action('admin_notices', function() {
         delete_transient('_ps_bulk_error');
         echo '<div class="notice notice-error is-dismissible"><p>Error: ' . esc_html($error ?: 'Unknown error') . '</p></div>';
     }
+});
+
+/* ---------------------------------------------------------------------------
+ * Prompt Editor handlers
+ * ------------------------------------------------------------------------- */
+add_action('admin_post_psai_save_prompt', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+    check_admin_referer('psai_save_prompt');
+
+    $custom_prompt = isset($_POST['psai_custom_prompt']) ? $_POST['psai_custom_prompt'] : '';
+
+    // Get current options
+    $opts = get_option(\PSAI\Settings::OPTION, []) ?: [];
+
+    // Update the custom prompt
+    $opts['CUSTOM_PROMPT'] = $custom_prompt;
+
+    // Save back
+    update_option(\PSAI\Settings::OPTION, $opts);
+
+    wp_redirect(add_query_arg([
+        'page' => 'psai_prompt_editor',
+        'psai_prompt_saved' => '1'
+    ], admin_url('admin.php')));
+    exit;
+});
+
+add_action('admin_post_psai_reset_prompt', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+    check_admin_referer('psai_reset_prompt');
+
+    // Get current options
+    $opts = get_option(\PSAI\Settings::OPTION, []) ?: [];
+
+    // Clear the custom prompt
+    $opts['CUSTOM_PROMPT'] = '';
+
+    // Save back
+    update_option(\PSAI\Settings::OPTION, $opts);
+
+    wp_redirect(add_query_arg([
+        'page' => 'psai_prompt_editor',
+        'psai_prompt_reset' => '1'
+    ], admin_url('admin.php')));
+    exit;
 });

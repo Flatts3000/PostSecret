@@ -9,6 +9,20 @@ final class Prompt
     // bump when TEXT changes
     public const VERSION = '4.1.0';
 
+    /**
+     * Get the prompt text, with support for custom prompts from settings.
+     * Falls back to built-in TEXT if no custom prompt is configured.
+     *
+     * @return string
+     */
+    public static function get(): string
+    {
+        $opts = get_option(\PSAI\Settings::OPTION, []) ?: [];
+        $custom = trim((string)($opts['CUSTOM_PROMPT'] ?? ''));
+
+        return $custom !== '' ? $custom : self::TEXT;
+    }
+
     public const TEXT = <<<'PROMPT'
 You are the PostSecret classifier. Be concise, neutral, and privacy-preserving.
 

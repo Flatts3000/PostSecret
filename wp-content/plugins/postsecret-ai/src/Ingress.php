@@ -247,7 +247,9 @@ final class Ingress
  */
 function psai_store_result(int $att_id, array $payload, string $model): void
 {
-    $promptVer = \PSAI\Prompt::VERSION . '#sha256:' . substr(hash('sha256', \PSAI\Prompt::TEXT), 0, 8);
+    // Use actual prompt (custom or built-in) for version tracking
+    $actualPrompt = \PSAI\Prompt::get();
+    $promptVer = \PSAI\Prompt::VERSION . '#sha256:' . substr(hash('sha256', $actualPrompt), 0, 8);
 
     // Extract and normalize facets
     $topics = array_values(array_filter(array_map('strval', $payload['topics'] ?? [])));
