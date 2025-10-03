@@ -15,17 +15,44 @@
 
 .ps-search-input {
     padding: 0.5rem 2.5rem 0.5rem 1rem;
-    border: 1px solid var(--wp--preset--color--contrast-2, #ddd);
+    border: 1px solid var(--wp--preset--color--border, #ddd);
     border-radius: 24px;
     font-size: 0.95rem;
     width: 240px;
     transition: all 0.2s ease;
+    background: var(--wp--preset--color--bg, #fff);
+    color: var(--wp--preset--color--text, #000);
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.ps-search-input::placeholder {
+    color: var(--wp--preset--color--muted, #666);
+    opacity: 0.7;
 }
 
 .ps-search-input:focus {
     outline: none;
-    border-color: var(--wp--preset--color--primary, #333);
+    border-color: var(--wp--preset--color--accent, #a51818);
     width: 280px;
+}
+
+/* Clear button (X) styling - WebKit browsers */
+.ps-search-input::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 16px;
+    width: 16px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'%3E%3C/line%3E%3Cline x1='6' y1='6' x2='18' y2='18'%3E%3C/line%3E%3C/svg%3E");
+    background-size: contain;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    margin-right: 0.5rem;
+}
+
+/* Dark mode clear button */
+html[data-theme="dark"] .ps-search-input::-webkit-search-cancel-button {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'%3E%3C/line%3E%3Cline x1='6' y1='6' x2='18' y2='18'%3E%3C/line%3E%3C/svg%3E");
 }
 
 .ps-search-button {
@@ -35,17 +62,33 @@
     border: none;
     padding: 0.5rem;
     cursor: pointer;
-    color: var(--wp--preset--color--contrast, #333);
+    color: var(--wp--preset--color--text, #333);
     transition: color 0.2s ease;
+    pointer-events: none; /* Prevent overlap with clear button */
 }
 
 .ps-search-button:hover {
-    color: var(--wp--preset--color--primary, #000);
+    color: var(--wp--preset--color--accent, #a51818);
 }
 
 .ps-search-button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* Dark mode search input */
+html[data-theme="dark"] .ps-search-input {
+    background: var(--wp--preset--color--bg, #000);
+    color: var(--wp--preset--color--text, #fff);
+    border-color: var(--wp--preset--color--border, #333);
+}
+
+html[data-theme="dark"] .ps-search-input::placeholder {
+    color: var(--wp--preset--color--muted, #999);
+}
+
+html[data-theme="dark"] .ps-search-button {
+    color: var(--wp--preset--color--text, #fff);
 }
 
 .ps-search-error {
@@ -65,35 +108,59 @@
 
 /* Search Results Page */
 .ps-search-header {
-    margin-bottom: 2rem;
+    margin-bottom: 3rem;
     text-align: center;
-    padding: 2rem 1rem;
+    padding: clamp(2rem, 4vw, 4rem) 1rem clamp(1rem, 2vw, 2rem);
+    background: var(--wp--preset--color--tint, transparent);
 }
 
 .ps-search-header h1 {
-    font-size: clamp(1.75rem, 3vw, 2.25rem);
-    margin-bottom: 0.5rem;
+    font-size: clamp(2rem, 4vw, 3rem);
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+    color: var(--wp--preset--color--text, #000);
 }
 
 .ps-search-count {
-    color: var(--wp--preset--color--contrast-2, #666);
-    font-size: 1rem;
+    color: var(--wp--preset--color--muted, #666);
+    font-size: 1.125rem;
+    font-weight: 400;
 }
 
 .ps-search-loading {
-    color: var(--wp--preset--color--contrast-2, #666);
-    font-size: 1.1rem;
+    color: var(--wp--preset--color--muted, #666);
+    font-size: 1.125rem;
     margin-top: 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .ps-search-loading i {
-    margin-right: 0.5rem;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
 .ps-search-error-msg {
-    color: #c33;
-    font-size: 1.1rem;
+    color: var(--wp--preset--color--accent, #c33);
+    font-size: 1.125rem;
     margin: 1rem 0;
+    padding: 1rem;
+    background: rgba(165, 24, 24, 0.1);
+    border-radius: 8px;
+}
+
+/* Dark mode adjustments */
+html[data-theme="dark"] .ps-search-header {
+    background: var(--wp--preset--color--tint, transparent);
+}
+
+html[data-theme="dark"] .ps-search-error-msg {
+    background: rgba(224, 42, 42, 0.15);
 }
 
 .ps-button {
@@ -128,26 +195,51 @@
     color: var(--wp--preset--color--contrast-3, #999) !important;
 }
 
-/* Search Results - Single Column Layout for Reading */
+/* Search Results - Single Column Reading Experience */
 #ps-search-grid {
     display: flex;
     flex-direction: column;
-    gap: 2rem;
-    margin-top: 2rem;
-    max-width: 900px;
-    margin-left: auto;
-    margin-right: auto;
+    gap: clamp(2rem, 4vw, 4rem);
+    margin: 0 auto;
+    max-width: 800px;
+    padding: 0 var(--breathing-room, 2rem) 4rem;
 }
 
 #ps-search-grid .ps-card {
     width: 100%;
     max-width: none;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 #ps-search-grid .ps-card__img {
     width: 100%;
+    max-width: 100%;
     height: auto;
     object-fit: contain;
+    display: block;
+}
+
+/* Match percentage label - prominent and modern */
+#ps-search-grid .ps-card__similarity {
+    position: relative;
+    margin-top: 1rem;
+    padding: 0.5rem 1.25rem;
+    background: var(--wp--preset--color--accent, #a51818);
+    color: #ffffff;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: 24px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+html[data-theme="dark"] #ps-search-grid .ps-card__similarity {
+    background: var(--wp--preset--color--accent, #E02A2A);
+    box-shadow: 0 2px 8px rgba(224, 42, 42, 0.3);
 }
 
 /* Loading indicator for infinite scroll */
@@ -161,7 +253,7 @@
     margin-right: 0.5rem;
 }
 
-/* Similarity score badge */
+/* Similarity score badge - base styles (overridden for search grid) */
 .ps-card__similarity {
     display: inline-block;
     margin-top: 0.5rem;
@@ -173,9 +265,68 @@
     font-weight: 500;
 }
 
+html[data-theme="dark"] .ps-card__similarity {
+    background: var(--wp--preset--color--border, #333);
+    color: var(--wp--preset--color--text, #fff);
+}
+
 /* Sentinel element for intersection observer */
 .ps-search-sentinel {
     visibility: hidden;
+}
+
+/* Subtle card styling for reading experience */
+#ps-search-grid .ps-card {
+    transition: opacity 0.2s ease;
+    border-radius: 0;
+    opacity: 1;
+}
+
+#ps-search-grid .ps-card:hover {
+    opacity: 0.95;
+}
+
+#ps-search-grid .ps-card__link {
+    display: block;
+    width: 100%;
+}
+
+#ps-search-grid .ps-card__media {
+    width: 100%;
+    margin: 0;
+}
+
+/* Center card metadata */
+#ps-search-grid .ps-card__meta {
+    text-align: center;
+    width: 100%;
+    padding: 1rem 0;
+}
+
+#ps-search-grid .ps-card__tags {
+    justify-content: center;
+    margin-top: 0.75rem;
+}
+
+#ps-search-grid .ps-card__excerpt {
+    max-width: 600px;
+    margin: 0.5rem auto;
+    line-height: 1.6;
+    color: var(--wp--preset--color--text, #000);
+}
+
+html[data-theme="dark"] #ps-search-grid .ps-card__excerpt {
+    color: var(--wp--preset--color--text, #fff);
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    #ps-search-grid .ps-card {
+        transition: none;
+    }
+    #ps-search-grid .ps-card:hover {
+        opacity: 1;
+    }
 }
 
 /* Responsive adjustments */
@@ -189,7 +340,13 @@
     }
 
     #ps-search-grid {
-        gap: 1.5rem;
+        gap: 3rem;
+        padding: 0 1rem 3rem;
+    }
+
+    #ps-search-grid .ps-card__excerpt {
+        font-size: 0.9375rem;
+        line-height: 1.5;
     }
 }
 
@@ -208,6 +365,15 @@
     }
 
     #ps-search-grid {
-        gap: 1rem;
+        gap: 2.5rem;
+        max-width: 100%;
+    }
+
+    .ps-search-header {
+        padding: 1.5rem 1rem 1rem;
+    }
+
+    .ps-search-header h1 {
+        font-size: 1.75rem;
     }
 }
