@@ -38,6 +38,31 @@ function register_rest_routes()
         },
     ]);
 
+    // IP detection endpoint
+    register_rest_route('psai/v1', '/my-ip', [
+        'methods' => 'GET',
+        'permission_callback' => function () {
+            return is_user_logged_in() && current_user_can('upload_files');
+        },
+        'callback' => function () {
+            // Try to detect outgoing IP by making a request to a service
+            $response = wp_remote_get('https://api.ipify.org?format=json', ['timeout' => 10]);
+            $external_ip = 'unknown';
+
+            if (!is_wp_error($response)) {
+                $body = json_decode(wp_remote_retrieve_body($response), true);
+                $external_ip = $body['ip'] ?? 'unknown';
+            }
+
+            return new WP_REST_Response([
+                'server_ip' => $_SERVER['SERVER_ADDR'] ?? 'unknown',
+                'remote_addr' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
+                'external_ip' => $external_ip,
+                'http_x_forwarded_for' => $_SERVER['HTTP_X_FORWARDED_FOR'] ?? 'not set',
+            ], 200);
+        },
+    ]);
+
     // Diagnostic endpoint to check Qdrant configuration
     register_rest_route('psai/v1', '/qdrant-status', [
         'methods' => 'GET',
@@ -59,10 +84,24 @@ function register_rest_routes()
 
             if ($final_url !== 'not set') {
                 $test_url = rtrim($final_url, '/') . '/collections';
-                $response = wp_remote_get($test_url, ['timeout' => 5]);
+
+                // Get API key if configured
+                $headers = ['Content-Type' => 'application/json'];
+                $api_key = (string)opt('QDRANT_API_KEY', '');
+                if ($api_key === '') {
+                    $api_key = getenv('PS_QDRANT_API_KEY') ?: (defined('PS_QDRANT_API_KEY') ? constant('PS_QDRANT_API_KEY') : '');
+                }
+                if ($api_key !== '') {
+                    $headers['api-key'] = $api_key;
+                }
+
+                $response = wp_remote_get($test_url, ['timeout' => 5, 'headers' => $headers]);
                 if (!is_wp_error($response)) {
                     $code = wp_remote_retrieve_response_code($response);
                     $qdrant_accessible = ($code === 200);
+                    if ($code !== 200) {
+                        $qdrant_error = "HTTP {$code}: " . wp_remote_retrieve_body($response);
+                    }
                 } else {
                     $qdrant_error = $response->get_error_message();
                 }
