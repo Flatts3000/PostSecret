@@ -372,12 +372,22 @@ add_action('admin_post_psai_reclassify', function () {
         $embedding_ok = \PSAI\EmbeddingService::generate_and_store($front_id, $payload, $api, $embed_model);
 
         if (!$embedding_ok) {
-            // Try to get detailed error from transient
-            $detailed_error = get_transient('_ps_last_embedding_error');
-            if ($detailed_error) {
-                $error_details[] = $detailed_error;
+            // The error is already stored in _ps_last_error by EmbeddingService
+            // Just get it to show in the notice
+            $stored_error = get_post_meta($front_id, '_ps_last_error', true);
+
+            // Also try transient for additional context
+            $transient_error = get_transient('_ps_last_embedding_error');
+
+            if ($stored_error) {
+                $error_details[] = $stored_error;
+            } elseif ($transient_error) {
+                $error_details[] = $transient_error;
+                // Store it persistently since transient might expire
+                psai_set_last_error($front_id, 'Classification succeeded but embedding failed. ' . $transient_error);
             } else {
                 $error_details[] = 'Embedding generation failed - check API key and model configuration';
+                psai_set_last_error($front_id, 'Classification succeeded but embedding generation failed. Check API key and model configuration.');
             }
         }
 
@@ -385,10 +395,8 @@ add_action('admin_post_psai_reclassify', function () {
         \PSAI\Ingress::normalize_from_existing_payload($front_id);
         \PSAI\Metadata::compute_and_store($att);
 
-        // If embedding failed but classification succeeded, store partial error
+        // If embedding failed but classification succeeded, show partial error
         if (!$embedding_ok) {
-            $err_msg = 'Classification succeeded but embedding generation failed. ' . implode('; ', $error_details);
-            psai_set_last_error($front_id, $err_msg);
             $url = add_query_arg(['psai_msg' => 'partial_err'], get_edit_post_link($att, ''));
             wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=partial_err'));
             exit;

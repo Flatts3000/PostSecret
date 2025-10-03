@@ -152,6 +152,14 @@ final class AdminMetaBox
             // Show link to debug logs if available
             $debug_url = rest_url('psai/v1/debug-log?lines=100');
             echo '<p style="margin-top:8px;"><a href="' . esc_url($debug_url) . '" target="_blank" class="button button-small">View Debug Logs</a></p>';
+
+            // Check if there's a transient error with more details
+            $transient_err = get_transient('_ps_last_embedding_error');
+            if ($transient_err && $transient_err !== $err) {
+                echo '<details style="margin-top:8px;"><summary style="cursor:pointer;color:#b32d2e;">Additional error details</summary>';
+                echo '<code style="white-space:pre-wrap;background:#fff4e6;padding:8px;display:block;border-radius:3px;margin-top:4px;">' . esc_html($transient_err) . '</code>';
+                echo '</details>';
+            }
         }
 
         // Raw JSON viewer

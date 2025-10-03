@@ -25,6 +25,7 @@ class Schema
             // 3) Model & Generation
             ['section' => 'model', 'order' => 10, 'key' => 'MODEL_PROVIDER', 'label' => 'Model Provider', 'kind' => 'choice', 'default' => 'openai', 'choices' => ['openai'], 'help' => 'Provider (fixed to OpenAI for MVP)'],
             ['section' => 'model', 'order' => 20, 'key' => 'MODEL_NAME', 'label' => 'Model Name', 'kind' => 'str', 'default' => 'gpt-4o-mini', 'help' => 'Vision-capable model'],
+            ['section' => 'model', 'order' => 30, 'key' => 'EMBEDDING_MODEL', 'label' => 'Embedding Model', 'kind' => 'choice', 'default' => 'text-embedding-3-small', 'choices' => ['text-embedding-3-small', 'text-embedding-3-large'], 'help' => 'Model for generating embeddings (small=1536d, large=3072d)'],
             ['section' => 'model', 'order' => 40, 'key' => 'TEMPERATURE', 'label' => 'Temperature', 'kind' => 'float', 'default' => 0.2, 'min' => 0.0, 'max' => 2.0, 'help' => 'Creativity (0.0–2.0)'],
             ['section' => 'model', 'order' => 50, 'key' => 'TOP_P', 'label' => 'Top-p', 'kind' => 'float', 'default' => 1.0, 'min' => 0.0, 'max' => 1.0, 'help' => 'Nucleus sampling (0.0–1.0)'],
             ['section' => 'model', 'order' => 60, 'key' => 'MAX_TOKENS', 'label' => 'Max Tokens', 'kind' => 'int', 'default' => 1200, 'min' => 1, 'help' => 'Token limit per call'],
