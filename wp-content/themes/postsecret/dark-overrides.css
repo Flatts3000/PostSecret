@@ -304,7 +304,8 @@ input:focus {
 }
 
 /* Search form styling - Best practices */
-.ps-search {
+.ps-search,
+.ps-semantic-search {
   display: flex;
   align-items: stretch;
   background: transparent;
@@ -315,7 +316,14 @@ input:focus {
   position: relative;
 }
 
-.ps-search__input {
+.ps-search-wrapper {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.ps-search__input,
+.ps-search-input {
   background: var(--wp--preset--color--bg);
   border: 1px solid var(--wp--preset--color--border);
   border-right: none;
@@ -333,23 +341,27 @@ input:focus {
   appearance: none;
 }
 
-.ps-search__input:hover {
+.ps-search__input:hover,
+.ps-search-input:hover {
   border-color: var(--wp--preset--color--muted);
 }
 
-.ps-search__input:focus {
+.ps-search__input:focus,
+.ps-search-input:focus {
   border-color: var(--wp--preset--color--accent);
   border-right: 1px solid var(--wp--preset--color--accent);
   z-index: 1;
   position: relative;
 }
 
-.ps-search__input::placeholder {
+.ps-search__input::placeholder,
+.ps-search-input::placeholder {
   color: var(--wp--preset--color--muted);
   opacity: 0.7;
 }
 
-.ps-search__btn {
+.ps-search__btn,
+.ps-search-button {
   background: var(--wp--preset--color--bg);
   border: 1px solid var(--wp--preset--color--border);
   border-left: 1px solid var(--wp--preset--color--border);
@@ -368,44 +380,51 @@ input:focus {
   appearance: none;
 }
 
-.ps-search__btn:hover {
+.ps-search__btn:hover,
+.ps-search-button:hover {
   background: var(--wp--preset--color--accent);
   color: #ffffff;
   border-color: var(--wp--preset--color--accent);
 }
 
-.ps-search__btn:focus {
+.ps-search__btn:focus,
+.ps-search-button:focus {
   outline: 2px solid var(--wp--preset--color--accent);
   outline-offset: 2px;
   z-index: 2;
   position: relative;
 }
 
-.ps-search__btn:active {
+.ps-search__btn:active,
+.ps-search-button:active {
   transform: scale(0.98);
 }
 
 /* Ensure input and button align properly */
-.ps-search__input:focus + .ps-search__btn {
+.ps-search__input:focus + .ps-search__btn,
+.ps-search-input:focus + .ps-search-button {
   border-left-color: var(--wp--preset--color--accent);
 }
 
 /* Dark mode specific overrides for search */
-html[data-theme="dark"] .ps-search__input::placeholder {
+html[data-theme="dark"] .ps-search__input::placeholder,
+html[data-theme="dark"] .ps-search-input::placeholder {
   color: var(--wp--preset--color--muted);
   opacity: 0.7;
 }
 
 /* Responsive search */
 @media (max-width: 768px) {
-  .ps-search__input {
+  .ps-search__input,
+  .ps-search-input {
     width: 150px;
     min-width: 120px;
     font-size: 0.8125rem;
     padding: 0.5rem 0.75rem;
   }
 
-  .ps-search__btn {
+  .ps-search__btn,
+  .ps-search-button {
     padding: 0.5rem 0.75rem;
   }
 }
@@ -430,7 +449,8 @@ html[data-theme="dark"] .ps-search__input::placeholder {
     font-size: 1.125rem;
   }
 
-  .ps-search__input {
+  .ps-search__input,
+  .ps-search-input {
     width: 150px;
   }
 }

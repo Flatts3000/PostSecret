@@ -49,18 +49,13 @@ final class AdminMetaBox
         elseif ($near) $status = 'Near-duplicate';
         elseif ($payload) $status = 'Classified';
 
-        // Actions: Process now + Re-classify
-        $proc_url = wp_nonce_url(
-            admin_url('admin-post.php?action=psai_process_now&att=' . (int)$post->ID),
-            'psai_process_now_' . (int)$post->ID
-        );
+        // Actions: Re-classify only
         $reclassify_url = wp_nonce_url(
             admin_url('admin-post.php?action=psai_reclassify&att=' . (int)$post->ID),
             'psai_reclassify_' . (int)$post->ID
         );
         echo '<p>';
-        echo '<a href="' . esc_url($proc_url) . '" class="button button-secondary">Process now</a> ';
-        echo '<a href="' . esc_url($reclassify_url) . '" class="button button-secondary" style="margin-left:4px;" onclick="return confirm(\'Re-run AI classification? This will overwrite existing data.\')">Re-classify</a>';
+        echo '<a href="' . esc_url($reclassify_url) . '" class="button button-secondary" onclick="return confirm(\'Re-run AI classification? This will overwrite existing data.\')">Re-classify</a>';
         echo '</p>';
 
         echo '<div class="psai-box">';

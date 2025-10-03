@@ -1,12 +1,17 @@
 <?php
 /**
  * Plugin Name: PostSecret AI (Ultra-MVP)
- * Description: Admin-only tools for classification: test console + single postcard uploader.
- * Version: 0.0.5
+ * Description: Admin-only tools for classification: test console, single uploader, and bulk uploader.
+ * Version: 0.0.6
+ *
+ * SETUP:
+ * - Bulk upload requires database tables. Run migrations from postsecret-admin plugin:
+ *   Visit: /wp-content/plugins/postsecret-admin/run-migrations.php
  */
 if (!defined('ABSPATH')) exit;
 
 define('PSAI_SLUG', 'postsecret-ai');
+define('PSAI_VERSION', '0.0.6');
 
 // Core
 require __DIR__ . '/src/Prompt.php';
@@ -14,16 +19,21 @@ require __DIR__ . '/src/Schema.php';
 require __DIR__ . '/src/SchemaGuard.php';
 require __DIR__ . '/src/Classifier.php';
 require __DIR__ . '/src/EmbeddingService.php';
+require __DIR__ . '/src/ClassificationService.php';
 
 // Utilities
 require __DIR__ . '/src/Metadata.php';
 require __DIR__ . '/src/AttachmentSync.php';
 require __DIR__ . '/src/Ingress.php';
 
+// Bulk Upload
+require __DIR__ . '/src/BulkJobService.php';
+
 // Admin
 require __DIR__ . '/src/Settings.php';
 require __DIR__ . '/src/AdminPage.php';
 require __DIR__ . '/src/AdminSingleUpload.php';
+require __DIR__ . '/src/AdminBulkUpload.php';
 require __DIR__ . '/src/AdminMetaBox.php';
 
 /* ---------------------------------------------------------------------------
@@ -99,6 +109,15 @@ add_action('admin_menu', function () {
         'upload_files',
         'psai_upload_single',
         ['PSAI\\AdminSingleUpload', 'render']
+    );
+
+    add_submenu_page(
+        'psai_postcards',
+        'Bulk Upload',
+        'Bulk Upload',
+        'manage_options',
+        'psai_bulk_upload',
+        ['PSAI\\AdminBulkUpload', 'render']
     );
 });
 
@@ -209,71 +228,11 @@ add_action('psai_process_pair_event', function ($front_id, $back_id = 0) {
     $front_id = (int)$front_id;
     $back_id = (int)$back_id ?: null;
 
-    $env = get_option(\PSAI\Settings::OPTION, \PSAI\Settings::defaults());
-    $api = $env['API_KEY'] ?? '';
-    $model = $env['MODEL_NAME'] ?? 'gpt-4o-mini';
-
-    // Precondition checks → set error and bail cleanly
-    if (!$front_id) {
-        set_transient('_ps_last_error_global', 'Missing front_id in processor.', 600);
-        return;
-    }
-    if (get_post_meta($front_id, '_ps_duplicate_of', true)) {
-        psai_set_last_error($front_id, 'Skipped: duplicate image.');
-        return;
-    }
-    if (!$api) {
-        psai_set_last_error([$front_id, $back_id], 'Missing OpenAI API key.');
-        return;
-    }
-
-    try {
-        // Data URLs so we don’t rely on public URLs
-        $frontSrc = \PSAI\psai_make_data_url($front_id);
-        $backSrc = $back_id ? \PSAI\psai_make_data_url($back_id) : null;
-
-        // Classify + normalize to schema
-        $payload = \PSAI\Classifier::classify($api, $model, $frontSrc, $backSrc);
-        $payload = \PSAI\SchemaGuard::normalize($payload);
-
-        // Store result (sets tags, model, prompt version, vetted flags)
-        \PSAI\psai_store_result($front_id, $payload, $model);
-
-        // Sync media fields (Alt/Caption/Description)
-        \PSAI\AttachmentSync::sync_from_payload($front_id, $payload, $back_id);
-
-        // Enrich quick orientation/color on both sides
-        \PSAI\Metadata::compute_and_store($front_id);
-        if ($back_id) \PSAI\Metadata::compute_and_store($back_id);
-
-        // Optional export manifest
-        \PSAI\psai_update_manifest($front_id, $payload);
-
-        // Mirror some fields onto back (paired) for convenience
-        if ($back_id) {
-            update_post_meta($back_id, '_ps_pair_id', $front_id);
-            update_post_meta($back_id, '_ps_side', 'back');
-            update_post_meta($back_id, '_ps_payload', $payload);
-            update_post_meta($back_id, '_ps_tags', get_post_meta($front_id, '_ps_tags', true));
-            update_post_meta($back_id, '_ps_model', get_post_meta($front_id, '_ps_model', true));
-            update_post_meta($back_id, '_ps_prompt_version', get_post_meta($front_id, '_ps_prompt_version', true));
-            update_post_meta($back_id, '_ps_updated_at', wp_date('c'));
-            $rs = get_post_meta($front_id, '_ps_review_status', true);
-            update_post_meta($back_id, '_ps_review_status', $rs);
-            update_post_meta($back_id, '_ps_is_vetted', $rs === 'auto_vetted' ? '1' : '0');
-        }
-
-        // Clear any previous errors on success
-        psai_clear_last_error([$front_id, $back_id]);
-
-    } catch (\Throwable $e) {
-        $msg = substr($e->getMessage(), 0, 500);
-        psai_set_last_error([$front_id, $back_id], $msg);
-    }
+    \PSAI\ClassificationService::classify_and_store($front_id, $back_id, false);
 }, 10, 2);
 
 /* ---------------------------------------------------------------------------
- * “Process now” button on the attachment edit screen
+ * "Process now" button on the attachment edit screen
  * ------------------------------------------------------------------------- */
 add_action('admin_post_psai_process_now', function () {
     if (!current_user_can('upload_files')) wp_die('Not allowed', 403);
@@ -285,51 +244,16 @@ add_action('admin_post_psai_process_now', function () {
         exit;
     }
 
-    try {
-        // If this is the back, flip to the front as canonical
-        $maybePair = (int)get_post_meta($att, '_ps_pair_id', true);
-        $side = get_post_meta($att, '_ps_side', true);
-        $front_id = ($side === 'back' && $maybePair) ? $maybePair : $att;
+    $result = \PSAI\ClassificationService::process_attachment($att, false);
 
-        // Classify if we don't already have a payload
-        $payload = get_post_meta($front_id, '_ps_payload', true);
-        if (!is_array($payload)) {
-            $env = get_option(\PSAI\Settings::OPTION, \PSAI\Settings::defaults());
-            $api = $env['API_KEY'] ?? '';
-            $model = $env['MODEL_NAME'] ?? 'gpt-4o-mini';
-            if (!$api) throw new \RuntimeException('Missing OpenAI API key.');
-
-            $frontSrc = \PSAI\psai_make_data_url($front_id);
-            $payload = \PSAI\Classifier::classify($api, $model, $frontSrc, null);
-            $payload = \PSAI\SchemaGuard::normalize($payload);
-
-            \PSAI\psai_store_result($front_id, $payload, $model);
-            \PSAI\AttachmentSync::sync_from_payload($front_id, $payload, null);
-
-            // Generate and store embedding for new classifications
-            $embed_model = $env['EMBEDDING_MODEL'] ?? 'text-embedding-3-small';
-            \PSAI\EmbeddingService::generate_and_store($front_id, $payload, $api, $embed_model);
-        }
-
-        // Normalize flags from the saved payload + recompute metadata
-        \PSAI\Ingress::normalize_from_existing_payload($front_id);
-
-        // Also compute orientation/color for the side the user is viewing
-        \PSAI\Metadata::compute_and_store($att);
-
-        psai_clear_last_error($front_id);
-
+    if ($result['success']) {
         $url = add_query_arg(['psai_msg' => 'ok'], get_edit_post_link($att, ''));
         wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=ok'));
-        exit;
-
-    } catch (\Throwable $e) {
-        $msg = substr($e->getMessage(), 0, 500);
-        psai_set_last_error($att, $msg);
+    } else {
         $url = add_query_arg(['psai_msg' => 'err'], get_edit_post_link($att, ''));
         wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=err'));
-        exit;
     }
+    exit;
 });
 
 /* -------------------------------------------------------------------------
@@ -345,75 +269,30 @@ add_action('admin_post_psai_reclassify', function () {
         exit;
     }
 
-    $error_details = [];
+    $result = \PSAI\ClassificationService::process_attachment($att, true);
 
-    try {
-        // If this is the back, flip to the front as canonical
-        $maybePair = (int)get_post_meta($att, '_ps_pair_id', true);
+    if ($result['success']) {
+        // Check if there was a partial error (embedding failed but classification succeeded)
+        $front_id = $att;
         $side = get_post_meta($att, '_ps_side', true);
-        $front_id = ($side === 'back' && $maybePair) ? $maybePair : $att;
-
-        // Get config
-        $env = get_option(\PSAI\Settings::OPTION, \PSAI\Settings::defaults());
-        $api = $env['API_KEY'] ?? '';
-        $model = $env['MODEL_NAME'] ?? 'gpt-4o-mini';
-        if (!$api) throw new \RuntimeException('Missing OpenAI API key.');
-
-        // Force re-classification
-        $frontSrc = \PSAI\psai_make_data_url($front_id);
-        $payload = \PSAI\Classifier::classify($api, $model, $frontSrc, null);
-        $payload = \PSAI\SchemaGuard::normalize($payload);
-
-        \PSAI\psai_store_result($front_id, $payload, $model);
-        \PSAI\AttachmentSync::sync_from_payload($front_id, $payload, null);
-
-        // Generate and store embedding with detailed error capture
-        $embed_model = $env['EMBEDDING_MODEL'] ?? 'text-embedding-3-small';
-        $embedding_ok = \PSAI\EmbeddingService::generate_and_store($front_id, $payload, $api, $embed_model);
-
-        if (!$embedding_ok) {
-            // The error is already stored in _ps_last_error by EmbeddingService
-            // Just get it to show in the notice
-            $stored_error = get_post_meta($front_id, '_ps_last_error', true);
-
-            // Also try transient for additional context
-            $transient_error = get_transient('_ps_last_embedding_error');
-
-            if ($stored_error) {
-                $error_details[] = $stored_error;
-            } elseif ($transient_error) {
-                $error_details[] = $transient_error;
-                // Store it persistently since transient might expire
-                psai_set_last_error($front_id, 'Classification succeeded but embedding failed. ' . $transient_error);
-            } else {
-                $error_details[] = 'Embedding generation failed - check API key and model configuration';
-                psai_set_last_error($front_id, 'Classification succeeded but embedding generation failed. Check API key and model configuration.');
-            }
+        $maybePair = (int)get_post_meta($att, '_ps_pair_id', true);
+        if ($side === 'back' && $maybePair) {
+            $front_id = $maybePair;
         }
 
-        // Normalize flags + recompute metadata
-        \PSAI\Ingress::normalize_from_existing_payload($front_id);
-        \PSAI\Metadata::compute_and_store($att);
-
-        // If embedding failed but classification succeeded, show partial error
-        if (!$embedding_ok) {
+        $last_error = get_post_meta($front_id, '_ps_last_error', true);
+        if ($last_error && str_contains($last_error, 'embedding')) {
             $url = add_query_arg(['psai_msg' => 'partial_err'], get_edit_post_link($att, ''));
             wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=partial_err'));
-            exit;
+        } else {
+            $url = add_query_arg(['psai_msg' => 'reclassified'], get_edit_post_link($att, ''));
+            wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=reclassified'));
         }
-
-        psai_clear_last_error($front_id);
-
-        $url = add_query_arg(['psai_msg' => 'reclassified'], get_edit_post_link($att, ''));
-        wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=reclassified'));
-        exit;
-
-    } catch (\Throwable $e) {
-        psai_set_last_error($att, substr($e->getMessage(), 0, 500));
+    } else {
         $url = add_query_arg(['psai_msg' => 'err'], get_edit_post_link($att, ''));
         wp_safe_redirect($url ?: admin_url('upload.php?psai_msg=err'));
-        exit;
     }
+    exit;
 });
 
 /* Small admin notice so you know the button worked */
@@ -485,4 +364,277 @@ add_action('rest_api_init', function () {
             return new \WP_REST_Response(['exists' => true, 'lines' => $lines], 200);
         },
     ]);
+});
+
+/* ---------------------------------------------------------------------------
+ * Bulk Upload AJAX Endpoints
+ * ------------------------------------------------------------------------- */
+
+// List jobs
+add_action('wp_ajax_psai_bulk_list_jobs', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $jobs = \PSAI\BulkJobService::list_jobs(50);
+
+    // Format for display
+    $formatted = array_map(function($job) {
+        return [
+            'id' => (int)$job['id'],
+            'uuid' => $job['uuid'],
+            'status' => $job['status'],
+            'source' => $job['source'],
+            'total' => (int)$job['total_items'],
+            'processed' => (int)$job['processed_items'],
+            'success_count' => (int)$job['success_count'],
+            'fail_count' => (int)$job['fail_count'],
+            'last_error' => $job['last_error'] ? substr($job['last_error'], 0, 100) : null,
+            'created' => wp_date('Y-m-d H:i', strtotime($job['created_at'])),
+        ];
+    }, $jobs);
+
+    wp_send_json_success(['jobs' => $formatted]);
+});
+
+// Get job detail
+add_action('wp_ajax_psai_bulk_get_job', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_REQUEST['job_id']) ? (int)$_REQUEST['job_id'] : 0;
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $job = \PSAI\BulkJobService::get_job($job_id);
+    if (!$job) wp_send_json_error('Job not found');
+
+    wp_send_json_success([
+        'id' => (int)$job['id'],
+        'uuid' => $job['uuid'],
+        'status' => $job['status'],
+        'source' => $job['source'],
+        'staging_path' => $job['staging_path'],
+        'total' => (int)$job['total_items'],
+        'processed' => (int)$job['processed_items'],
+        'success_count' => (int)$job['success_count'],
+        'fail_count' => (int)$job['fail_count'],
+        'started_at' => $job['started_at'],
+        'created_at' => $job['created_at'],
+        'updated_at' => $job['updated_at'],
+    ]);
+});
+
+// Start job
+add_action('wp_ajax_psai_bulk_start_job', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $result = \PSAI\BulkJobService::update_job_status($job_id, \PSAI\BulkJobService::STATUS_RUNNING);
+    if ($result) {
+        wp_send_json_success();
+    } else {
+        wp_send_json_error('Failed to start job');
+    }
+});
+
+// Pause job
+add_action('wp_ajax_psai_bulk_pause_job', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $result = \PSAI\BulkJobService::update_job_status($job_id, \PSAI\BulkJobService::STATUS_PAUSED);
+    if ($result) {
+        wp_send_json_success();
+    } else {
+        wp_send_json_error('Failed to pause job');
+    }
+});
+
+// Stop job
+add_action('wp_ajax_psai_bulk_stop_job', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $result = \PSAI\BulkJobService::update_job_status($job_id, \PSAI\BulkJobService::STATUS_STOPPED);
+    if ($result) {
+        wp_send_json_success();
+    } else {
+        wp_send_json_error('Failed to stop job');
+    }
+});
+
+// Process batch (step)
+add_action('wp_ajax_psai_bulk_step', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    $batch_size = isset($_POST['batch_size']) ? (int)$_POST['batch_size'] : 25;
+
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $result = \PSAI\BulkJobService::process_batch($job_id, $batch_size);
+    wp_send_json_success($result);
+});
+
+// Retry failed items
+add_action('wp_ajax_psai_bulk_retry_failed', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $count = \PSAI\BulkJobService::retry_failed($job_id);
+    wp_send_json_success(['requeued' => $count]);
+});
+
+// Delete job
+add_action('wp_ajax_psai_bulk_delete_job', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $result = \PSAI\BulkJobService::delete_job($job_id);
+    if ($result) {
+        wp_send_json_success();
+    } else {
+        wp_send_json_error('Failed to delete job');
+    }
+});
+
+// Get errors
+add_action('wp_ajax_psai_bulk_get_errors', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_REQUEST['job_id']) ? (int)$_REQUEST['job_id'] : 0;
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $errors = \PSAI\BulkJobService::get_errors($job_id, 100);
+
+    $formatted = array_map(function($error) {
+        return [
+            'id' => (int)$error['id'],
+            'file_path' => $error['file_path'],
+            'status' => $error['status'],
+            'attempts' => (int)$error['attempts'],
+            'last_error' => $error['last_error'],
+            'updated_at' => wp_date('Y-m-d H:i:s', strtotime($error['updated_at'])),
+        ];
+    }, $errors);
+
+    wp_send_json_success(['errors' => $formatted]);
+});
+
+// Save job settings
+add_action('wp_ajax_psai_bulk_save_settings', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    $settings = isset($_POST['settings']) ? (array)$_POST['settings'] : [];
+
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    $result = \PSAI\BulkJobService::save_settings($job_id, $settings);
+    if ($result) {
+        wp_send_json_success();
+    } else {
+        wp_send_json_error('Failed to save settings');
+    }
+});
+
+// Export errors CSV
+add_action('wp_ajax_psai_bulk_export_errors', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_REQUEST['job_id']) ? (int)$_REQUEST['job_id'] : 0;
+    if (!$job_id) wp_die('Invalid job ID');
+
+    $csv = \PSAI\BulkJobService::export_errors_csv($job_id);
+
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename=psai-bulk-errors-' . $job_id . '.csv');
+    echo $csv;
+    exit;
+});
+
+// Create job (file upload)
+add_action('admin_post_psai_bulk_create_job', function() {
+    try {
+        error_log('PSAI Bulk: Handler called');
+
+        if (!current_user_can('manage_options')) {
+            error_log('PSAI Bulk: Unauthorized user');
+            wp_die('Unauthorized', 403);
+        }
+
+        error_log('PSAI Bulk: Checking nonce');
+        check_admin_referer('psai_bulk_create_job', 'psai_bulk_nonce');
+
+        // Check if tables exist first
+        global $wpdb;
+        $table_jobs = $wpdb->prefix . 'psai_bulk_jobs';
+        $tables_exist = $wpdb->get_var("SHOW TABLES LIKE '{$table_jobs}'") === $table_jobs;
+
+        error_log('PSAI Bulk: Tables exist: ' . ($tables_exist ? 'yes' : 'no'));
+
+        if (!$tables_exist) {
+            set_transient('_ps_bulk_error', 'Database tables not found. Please run migrations first.', 300);
+            wp_redirect(add_query_arg([
+                'page' => 'psai_bulk_upload',
+                'psai_msg' => 'err'
+            ], admin_url('admin.php')));
+            exit;
+        }
+
+        // Debug: Log the $_FILES array
+        error_log('PSAI Bulk Upload - $_FILES: ' . print_r($_FILES, true));
+
+        $result = \PSAI\BulkJobService::create_job($_FILES);
+
+        // Debug: Log the result
+        error_log('PSAI Bulk Upload - Result: ' . print_r($result, true));
+
+        if ($result['success']) {
+            wp_redirect(add_query_arg([
+                'page' => 'psai_bulk_upload',
+                'psai_msg' => 'job_created',
+                'job_id' => $result['job_id']
+            ], admin_url('admin.php')));
+        } else {
+            set_transient('_ps_bulk_error', $result['error'], 300);
+            wp_redirect(add_query_arg([
+                'page' => 'psai_bulk_upload',
+                'psai_msg' => 'err'
+            ], admin_url('admin.php')));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        error_log('PSAI Bulk FATAL ERROR: ' . $e->getMessage());
+        error_log('PSAI Bulk FATAL TRACE: ' . $e->getTraceAsString());
+        set_transient('_ps_bulk_error', 'Fatal error: ' . $e->getMessage(), 300);
+        wp_redirect(add_query_arg([
+            'page' => 'psai_bulk_upload',
+            'psai_msg' => 'err'
+        ], admin_url('admin.php')));
+        exit;
+    }
+});
+
+// Admin notices for bulk upload
+add_action('admin_notices', function() {
+    if (!isset($_GET['page']) || $_GET['page'] !== 'psai_bulk_upload') return;
+    if (!isset($_GET['psai_msg'])) return;
+
+    $msg = sanitize_text_field($_GET['psai_msg']);
+
+    if ($msg === 'job_created') {
+        echo '<div class="notice notice-success is-dismissible"><p>Job created successfully! Click "Open" to start processing.</p></div>';
+    } elseif ($msg === 'err') {
+        $error = get_transient('_ps_bulk_error');
+        delete_transient('_ps_bulk_error');
+        echo '<div class="notice notice-error is-dismissible"><p>Error: ' . esc_html($error ?: 'Unknown error') . '</p></div>';
+    }
 });

@@ -3,19 +3,12 @@ declare(strict_types=1);
 
 // Enqueue scripts and styles
 add_action('wp_enqueue_scripts', function () {
+    // Stream styles used by both front page and search
     wp_enqueue_style(
         'ps-stream',
         get_stylesheet_directory_uri() . '/assets/css/ps-stream.css',
         [],
         filemtime(get_stylesheet_directory() . '/assets/css/ps-stream.css')
-    );
-
-    // Semantic search styles
-    wp_enqueue_style(
-        'ps-semantic-search',
-        get_stylesheet_directory_uri() . '/assets/css/semantic-search.css',
-        [],
-        filemtime(get_stylesheet_directory() . '/assets/css/semantic-search.css')
     );
 
     // Mustache (templating) — keep it global so any template can use it
@@ -111,3 +104,8 @@ add_action('wp_enqueue_scripts', function () {
 if (!defined('WP_DEFAULT_THEME')) {
     define('WP_DEFAULT_THEME', 'ollie-child');
 }
+
+// Add shared Mustache card template to footer (used by both front-page and search)
+add_action('wp_footer', function () {
+    get_template_part('parts/card-mustache-template');
+});

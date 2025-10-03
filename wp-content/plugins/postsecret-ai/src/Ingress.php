@@ -40,6 +40,10 @@ final class Ingress
         }
         $att_id = (int)$att_id;
 
+        // Convert to WebP after upload (raw image used for classification first)
+        // This happens later in ClassificationService after classification is done
+        update_post_meta($att_id, '_ps_needs_webp_conversion', '1');
+
         // Side + initial flags
         update_post_meta($att_id, '_ps_side', ($side === 'back') ? 'back' : 'front');
         update_post_meta($att_id, '_ps_is_vetted', '0');
@@ -130,7 +134,7 @@ final class Ingress
 
     /**
      * Normalize flags from a previously saved AI payload.
-     * Useful for “Process now” or any repair action.
+     * Useful for "Process now" or any repair action.
      */
     public static function normalize_from_existing_payload(int $att_id): void
     {
@@ -150,6 +154,90 @@ final class Ingress
         if (class_exists('\PSAI\Metadata') && method_exists('\PSAI\Metadata', 'compute_and_store')) {
             \PSAI\Metadata::compute_and_store($att_id);
         }
+    }
+
+    /**
+     * Convert attachment to WebP format.
+     *
+     * @param int $att_id Attachment ID
+     * @return bool Success
+     */
+    public static function convert_to_webp(int $att_id): bool
+    {
+        $file_path = get_attached_file($att_id);
+        if (!$file_path || !file_exists($file_path)) {
+            return false;
+        }
+
+        // Skip if already WebP
+        $ext = strtolower(pathinfo($file_path, PATHINFO_EXTENSION));
+        if ($ext === 'webp') {
+            delete_post_meta($att_id, '_ps_needs_webp_conversion');
+            return true;
+        }
+
+        // Load image editor
+        $editor = wp_get_image_editor($file_path);
+        if (is_wp_error($editor)) {
+            return false;
+        }
+
+        // Get image dimensions
+        $size = $editor->get_size();
+        $width = (int)($size['width'] ?? 0);
+        $height = (int)($size['height'] ?? 0);
+
+        // Set quality for WebP (85 is a good balance)
+        $editor->set_quality(85);
+
+        // Generate WebP filename
+        $dir = dirname($file_path);
+        $basename = wp_basename($file_path, '.' . $ext);
+        $webp_path = trailingslashit($dir) . $basename . '.webp';
+
+        // Save as WebP
+        $saved = $editor->save($webp_path, 'image/webp');
+        if (is_wp_error($saved) || empty($saved['path'])) {
+            return false;
+        }
+
+        // Update attachment metadata
+        update_attached_file($att_id, $saved['path']);
+
+        // Update post MIME type
+        wp_update_post([
+            'ID' => $att_id,
+            'post_mime_type' => 'image/webp',
+        ]);
+
+        // Generate thumbnails for WebP
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+        $metadata = wp_generate_attachment_metadata($att_id, $saved['path']);
+        if (empty($metadata)) {
+            // Metadata generation failed - restore original state
+            update_attached_file($att_id, $file_path);
+            wp_update_post([
+                'ID' => $att_id,
+                'post_mime_type' => wp_check_filetype($file_path)['type'] ?? 'image/jpeg',
+            ]);
+            @unlink($webp_path);
+            return false;
+        }
+
+        wp_update_attachment_metadata($att_id, $metadata);
+
+        // Re-index with new hash (only after successful metadata generation)
+        self::index($att_id);
+
+        // Delete original file ONLY after all operations succeed
+        @unlink($file_path);
+
+        // Mark conversion complete
+        delete_post_meta($att_id, '_ps_needs_webp_conversion');
+        update_post_meta($att_id, '_ps_converted_to_webp', '1');
+        update_post_meta($att_id, '_ps_original_format', $ext);
+
+        return true;
     }
 }
 
