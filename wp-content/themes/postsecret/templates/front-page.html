@@ -59,45 +59,8 @@
 
         <!-- ✅ Mustache templates -->
         <!-- wp:html -->
-        <script id="psai-card-tpl" type="x-tmpl-mustache">
-            <article class="ps-card {{#hasBack}}ps-card--flippable{{/hasBack}}" data-id="{{id}}" data-orientation="{{orientation}}" data-width="{{width}}" data-height="{{height}}">
-              <div class="ps-card__inner">
-                <!-- Front side -->
-                <div class="ps-card__face ps-card__face--front">
-                  {{#hasBack}}
-                  <button class="ps-card__flip-btn" type="button" aria-label="Flip to see back" title="Click to flip">↻</button>
-                  {{/hasBack}}
-                  <a class="ps-card__link" href="{{link}}" aria-label="{{altFallback}}">
-                    <figure class="ps-card__media">
-                      <img class="ps-card__img" src="{{src}}" alt="{{alt}}">
-                      {{#advisory}}
-                      <figcaption class="ps-card__badge" aria-label="Content advisory" title="Content advisory">!</figcaption>
-                      {{/advisory}}
-                    </figure>
-                    <div class="ps-card__meta">
-                      <div class="ps-card__date">{{dateFmt}}</div>
-                      {{#excerpt}}<p class="ps-card__excerpt">{{excerpt}}</p>{{/excerpt}}
-                      {{#displayTags.length}}
-                      <div class="ps-card__tags">
-                        {{#displayTags}}<span class="ps-chip">{{.}}</span>{{/displayTags}}
-                        {{#overflowCount}}<span class="ps-chip ps-chip--more">+{{overflowCount}}</span>{{/overflowCount}}
-                      </div>
-                      {{/displayTags.length}}
-                    </div>
-                  </a>
-                </div>
-                <!-- Back side -->
-                {{#hasBack}}
-                <div class="ps-card__face ps-card__face--back">
-                  <button class="ps-card__flip-btn" type="button" aria-label="Flip to see front" title="Click to flip back">↻</button>
-                  <figure class="ps-card__media">
-                    <img class="ps-card__img" src="{{back_src}}" alt="{{back_alt}}">
-                  </figure>
-                </div>
-                {{/hasBack}}
-              </div>
-            </article>
-        </script>
+        <!-- Card template (#psai-card-tpl) is loaded globally via wp_footer in functions.php -->
+        <!-- Template source: parts/card-mustache-template.php -->
 
         <script id="psai-skeleton-tpl" type="x-tmpl-mustache">
             <div class="ps-skeleton" aria-hidden="true"></div>

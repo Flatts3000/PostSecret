@@ -210,15 +210,16 @@
         // Reset state
         displayedCount = 0;
 
-        // Create results section
+        // Create results section with ps-latest wrapper to match front page styling
         const section = document.createElement('div');
         section.id = 'ps-search-results';
+        section.className = 'ps-latest';
         section.innerHTML = `
             <div class="ps-search-header">
                 <h1>Search Results for: "${escapeHtml(query)}"</h1>
                 <p class="ps-search-count">${data.total} secret${data.total !== 1 ? 's' : ''} found</p>
             </div>
-            <div id="ps-search-grid" class="ps-grid"></div>
+            <div id="ps-search-grid" class="ps-stream"></div>
         `;
 
         container.innerHTML = '';
@@ -249,22 +250,26 @@
 
     function renderNextBatch(grid) {
         const cardTemplate = document.getElementById('psai-card-tpl');
-        const useMustache = cardTemplate && window.Mustache;
-        const template = useMustache ? cardTemplate.innerHTML : null;
 
+        // Mustache and template are required - fail explicitly if missing
+        if (!cardTemplate) {
+            console.error('Card template (#psai-card-tpl) not found');
+            throw new Error('Card template not found');
+        }
+        if (!window.Mustache) {
+            console.error('Mustache library not loaded');
+            throw new Error('Mustache library not loaded');
+        }
+
+        const template = cardTemplate.innerHTML;
         const start = displayedCount;
         const end = Math.min(start + ITEMS_PER_PAGE, allResults.length);
 
         for (let i = start; i < end; i++) {
             const item = allResults[i];
-
-            if (useMustache) {
-                const cardData = prepareCardData(item);
-                const html = window.Mustache.render(template, cardData);
-                grid.insertAdjacentHTML('beforeend', html);
-            } else {
-                renderSimpleCard(grid, item);
-            }
+            const cardData = prepareCardData(item);
+            const html = window.Mustache.render(template, cardData);
+            grid.insertAdjacentHTML('beforeend', html);
         }
 
         displayedCount = end;
@@ -324,16 +329,22 @@
         const date = item.date ? new Date(item.date) : null;
         const similarityPercent = item.similarity ? Math.round(item.similarity * 100) : 0;
 
+        // Format date to match front page (e.g., "Oct 3, 2025")
+        const dateFmt = date ? date.toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        }) : '';
+
         return {
             id: item.id,
             src: item.src,
             width: item.width,
             height: item.height,
             alt: item.alt || 'Secret postcard',
-            altFallback: item.alt || item.excerpt || 'Secret postcard',
+            altFallback: item.alt || 'Secret postcard',
             caption: item.caption,
-            excerpt: item.excerpt ? item.excerpt.substring(0, 140) + (item.excerpt.length > 140 ? '…' : '') : '',
-            dateFmt: date ? date.toLocaleDateString() : '',
+            dateFmt: dateFmt,
             displayTags: displayTags,
             overflowCount: overflowCount > 0 ? overflowCount : null,
             advisory: false, // Set based on content flags if available
@@ -346,23 +357,6 @@
             similarity: item.similarity,
             similarityPercent: similarityPercent > 0 ? similarityPercent : null,
         };
-    }
-
-    function renderSimpleCard(grid, item) {
-        const card = document.createElement('article');
-        card.className = 'ps-card';
-
-        // Format similarity score as percentage
-        const similarityPercent = item.similarity ? Math.round(item.similarity * 100) : 0;
-
-        card.innerHTML = `
-            <a href="${escapeHtml(item.link)}" class="ps-card__link">
-                <img src="${escapeHtml(item.src)}" alt="${escapeHtml(item.alt || 'Secret')}">
-                ${item.excerpt ? `<p>${escapeHtml(item.excerpt.substring(0, 140))}</p>` : ''}
-                ${item.similarity ? `<span class="ps-card__similarity" title="Similarity score">${similarityPercent}% match</span>` : ''}
-            </a>
-        `;
-        grid.appendChild(card);
     }
 
     function escapeHtml(text) {

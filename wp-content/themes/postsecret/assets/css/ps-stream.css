@@ -335,3 +335,90 @@ html[data-theme="dark"] .ps-latest .ps-card__flip-btn:hover {
         background-position: 0% 0, 0 0;
     }
 }
+
+/* ------------------------------
+   Search Page Styles
+------------------------------ */
+
+/* Search Results Header */
+.ps-search-header {
+    margin-bottom: 3rem;
+    text-align: center;
+    padding: clamp(2rem, 4vw, 4rem) 1rem clamp(1rem, 2vw, 2rem);
+    background: var(--wp--preset--color--tint, transparent);
+}
+
+.ps-search-header h1 {
+    font-size: clamp(2rem, 4vw, 3rem);
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+    color: var(--wp--preset--color--text, #000);
+}
+
+.ps-search-count {
+    color: var(--wp--preset--color--muted, #666);
+    font-size: 1.125rem;
+    font-weight: 400;
+}
+
+.ps-search-loading {
+    color: var(--wp--preset--color--muted, #666);
+    font-size: 1.125rem;
+    margin-top: 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ps-search-loading i {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.ps-search-loading-more {
+    text-align: center;
+    padding: 2rem;
+    color: var(--wp--preset--color--contrast-2, #666);
+}
+
+.ps-search-loading-more i {
+    margin-right: 0.5rem;
+}
+
+/* Match percentage badge */
+.ps-card__similarity {
+    margin-left: 0.75rem;
+    padding: 0.25rem 0.75rem;
+    background: var(--wp--preset--color--accent, #a51818);
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+html[data-theme="dark"] .ps-card__similarity {
+    background: var(--wp--preset--color--accent, #E02A2A);
+}
+
+/* CTA text below cards */
+.ps-card__cta {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--wp--preset--color--muted, #666);
+    font-weight: 500;
+}
+
+/* Card footer (date + similarity) */
+.ps-card__footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.5rem;
+}

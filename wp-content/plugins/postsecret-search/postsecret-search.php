@@ -352,6 +352,12 @@ function handle_semantic_search(WP_REST_Request $request)
             $back_alt = get_post_meta($back_id, '_wp_attachment_image_alt', true) ?: '';
         }
 
+        // Combine facets (topics, feelings, meanings) into tags array
+        $topics = (array)(get_post_meta($secret_id, '_ps_topics', true) ?: []);
+        $feelings = (array)(get_post_meta($secret_id, '_ps_feelings', true) ?: []);
+        $meanings = (array)(get_post_meta($secret_id, '_ps_meanings', true) ?: []);
+        $tags = array_values(array_merge($topics, $feelings, $meanings));
+
         $items[] = [
             'id' => $secret_id,
             'similarity' => $similarity,
@@ -362,7 +368,7 @@ function handle_semantic_search(WP_REST_Request $request)
             'caption' => get_post_field('post_excerpt', $secret_id) ?: '',
             'excerpt' => get_post_field('post_content', $secret_id) ?: '',
             'date' => get_post_datetime($secret_id)?->format('c'),
-            'tags' => array_values((array)(get_post_meta($secret_id, '_ps_tags', true) ?: [])),
+            'tags' => $tags,
             'primary' => get_post_meta($secret_id, '_ps_primary_hex', true) ?: '',
             'orientation' => get_post_meta($secret_id, '_ps_orientation', true) ?: '',
             'back_id' => $back_id,
