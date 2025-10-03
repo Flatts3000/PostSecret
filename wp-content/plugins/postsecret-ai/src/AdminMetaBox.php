@@ -162,6 +162,19 @@ final class AdminMetaBox
             }
         }
 
+        // Show Qdrant sync warning if embedding exists but Qdrant failed
+        $qdrant_err = get_transient('_ps_last_qdrant_error');
+        if ($embedding && $qdrant_err) {
+            echo '<p><strong>Qdrant Sync Warning:</strong><br>';
+            echo '<code style="white-space:pre-wrap;background:#fff4e6;padding:8px;display:block;border-radius:3px;">';
+            echo 'Embedding stored in MySQL but not synced to Qdrant: ' . esc_html($qdrant_err);
+            echo '</code></p>';
+        }
+
+        // Show diagnostic button for troubleshooting
+        $diag_url = rest_url('psai/v1/qdrant-status');
+        echo '<p style="margin-top:8px;"><a href="' . esc_url($diag_url) . '" target="_blank" class="button button-small">Check Qdrant Status</a></p>';
+
         // Raw JSON viewer
         if ($payload) {
             $json = wp_json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);

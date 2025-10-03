@@ -88,8 +88,15 @@ final class EmbeddingService
 
                 $qdrant_ok = self::qdrant_upsert($secret_id, $model, $embedding, $qdrantPayload);
                 if (!$qdrant_ok) {
-                    // Non-fatal - Qdrant is best-effort, but log it
+                    // Non-fatal - Qdrant is best-effort, but log it and store warning
+                    $msg = "Embedding stored in MySQL but Qdrant sync failed (check QDRANT_URL and QDRANT_API_KEY)";
                     error_log("[EmbeddingService] Qdrant upsert failed for secret {$secret_id} (non-fatal)");
+
+                    // Store warning so user can see it
+                    $existing_error = get_post_meta($secret_id, '_ps_last_error', true);
+                    if (empty($existing_error)) {
+                        psai_set_last_error($secret_id, $msg);
+                    }
                 }
             }
 
@@ -375,7 +382,10 @@ final class EmbeddingService
     private static function qdrant_request(string $method, string $path, ?array $body = null, int $timeout = null): ?array
     {
         $base = self::qdrant_url();
-        if ($base === null) return null;
+        if ($base === null) {
+            error_log('[EmbeddingService] Qdrant request skipped: URL not configured');
+            return null;
+        }
 
         $headers = [
             'Content-Type' => 'application/json',
@@ -398,10 +408,13 @@ final class EmbeddingService
         }
 
         $url = $base . $path;
+        error_log("[EmbeddingService] Qdrant request: {$method} {$url}");
         $res = wp_remote_request($url, $args);
 
         if (is_wp_error($res)) {
-            error_log('[EmbeddingService] Qdrant HTTP error: ' . $res->get_error_message());
+            $err = $res->get_error_message();
+            error_log("[EmbeddingService] Qdrant HTTP error: {$err}");
+            set_transient('_ps_last_qdrant_error', $err, 300);
             return null;
         }
 
@@ -410,10 +423,14 @@ final class EmbeddingService
 
         if ($code >= 300) {
             error_log("[EmbeddingService] Qdrant HTTP {$code}: " . substr($raw, 0, 300));
+            set_transient('_ps_last_qdrant_error', "HTTP {$code}: " . substr($raw, 0, 200), 300);
             return null;
         }
 
         $json = json_decode($raw, true);
+        if (is_array($json)) {
+            delete_transient('_ps_last_qdrant_error'); // Clear error on success
+        }
         return is_array($json) ? $json : null;
     }
 

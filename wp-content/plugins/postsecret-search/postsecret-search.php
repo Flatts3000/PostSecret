@@ -42,9 +42,11 @@ function register_rest_routes()
     register_rest_route('psai/v1', '/qdrant-status', [
         'methods' => 'GET',
         'permission_callback' => function () {
-            return is_user_logged_in() && current_user_can('manage_options');
+            return is_user_logged_in() && current_user_can('upload_files');
         },
         'callback' => function () {
+            global $wpdb;
+
             $qdrant_enabled = (bool)opt('QDRANT_ENABLE', true);
             $qdrant_url = (string)opt('QDRANT_URL', '');
             $env_url = getenv('PS_QDRANT_URL') ?: 'not set';
@@ -66,6 +68,20 @@ function register_rest_routes()
                 }
             }
 
+            // Check database table structure
+            $table = $wpdb->prefix . 'ps_text_embeddings';
+            $columns = $wpdb->get_results("DESCRIBE {$table}", ARRAY_A);
+            $has_input_hash = false;
+            foreach ($columns as $col) {
+                if ($col['Field'] === 'input_hash') {
+                    $has_input_hash = true;
+                    break;
+                }
+            }
+
+            // Count embeddings in database
+            $embedding_count = $wpdb->get_var("SELECT COUNT(*) FROM {$table}");
+
             return new WP_REST_Response([
                 'qdrant_enabled' => $qdrant_enabled,
                 'qdrant_url_settings' => $qdrant_url,
@@ -74,6 +90,9 @@ function register_rest_routes()
                 'qdrant_url_final' => $final_url,
                 'qdrant_accessible' => $qdrant_accessible,
                 'qdrant_error' => $qdrant_error,
+                'database_table_exists' => !empty($columns),
+                'database_has_input_hash_column' => $has_input_hash,
+                'database_embedding_count' => (int)$embedding_count,
             ], 200);
         },
     ]);
