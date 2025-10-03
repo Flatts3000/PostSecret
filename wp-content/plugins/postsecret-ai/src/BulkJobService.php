@@ -199,6 +199,7 @@ final class BulkJobService
 
     /**
      * Extract ZIP file and return image file paths.
+     * Validates each entry to prevent Zip Slip attacks.
      *
      * @param string $zip_path Path to ZIP file
      * @param string $dest_path Destination directory
@@ -215,20 +216,88 @@ final class BulkJobService
             return ['success' => false, 'error' => 'Failed to open ZIP file.'];
         }
 
-        $zip->extractTo($dest_path);
-        $zip->close();
+        // Normalize destination path for safe comparison
+        $dest_real = realpath($dest_path);
+        if ($dest_real === false) {
+            $zip->close();
+            return ['success' => false, 'error' => 'Invalid destination path.'];
+        }
 
-        // Recursively find all files
         $files = [];
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dest_path, \RecursiveDirectoryIterator::SKIP_DOTS)
-        );
+        $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
 
-        foreach ($iterator as $file) {
-            if ($file->isFile()) {
-                $files[] = $file->getPathname();
+        // Manually extract each file after validation
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $entry_name = $zip->getNameIndex($i);
+            if ($entry_name === false) {
+                continue;
+            }
+
+            // Security checks for path traversal (Zip Slip)
+            // 1. Reject absolute paths
+            if (strpos($entry_name, '/') === 0 || preg_match('/^[a-zA-Z]:/', $entry_name)) {
+                error_log("Bulk upload: Rejected absolute path in ZIP: {$entry_name}");
+                continue;
+            }
+
+            // 2. Reject directory traversal sequences
+            if (strpos($entry_name, '../') !== false || strpos($entry_name, '..\\') !== false) {
+                error_log("Bulk upload: Rejected directory traversal in ZIP: {$entry_name}");
+                continue;
+            }
+
+            // 3. Reject control characters and null bytes
+            if (preg_match('/[\x00-\x1F\x7F]/', $entry_name)) {
+                error_log("Bulk upload: Rejected entry with control characters: {$entry_name}");
+                continue;
+            }
+
+            // 4. Normalize and verify final path stays within destination
+            $target_path = $dest_path . DIRECTORY_SEPARATOR . $entry_name;
+            $target_real = realpath(dirname($target_path));
+
+            // If parent directory doesn't exist yet, create it safely
+            if ($target_real === false) {
+                $parent_dir = dirname($target_path);
+                if (!wp_mkdir_p($parent_dir)) {
+                    error_log("Bulk upload: Failed to create directory: {$parent_dir}");
+                    continue;
+                }
+                $target_real = realpath($parent_dir);
+            }
+
+            // Verify the target is within destination directory
+            if ($target_real === false || strpos($target_real, $dest_real) !== 0) {
+                error_log("Bulk upload: Rejected path outside destination: {$entry_name}");
+                continue;
+            }
+
+            // Skip directories
+            if (substr($entry_name, -1) === '/') {
+                continue;
+            }
+
+            // Only extract allowed image file types
+            $ext = strtolower(pathinfo($entry_name, PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowed_extensions, true)) {
+                continue;
+            }
+
+            // Extract the file
+            $content = $zip->getFromIndex($i);
+            if ($content === false) {
+                error_log("Bulk upload: Failed to read entry: {$entry_name}");
+                continue;
+            }
+
+            if (file_put_contents($target_path, $content) !== false) {
+                $files[] = $target_path;
+            } else {
+                error_log("Bulk upload: Failed to write file: {$target_path}");
             }
         }
+
+        $zip->close();
 
         return ['success' => true, 'files' => $files];
     }
