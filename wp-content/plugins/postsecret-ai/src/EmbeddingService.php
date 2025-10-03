@@ -529,7 +529,10 @@ final class EmbeddingService
         );
 
         if ($result === false) {
-            error_log("[EmbeddingService] DB write failed for secret {$secret_id}.");
+            $db_error = $wpdb->last_error ?: 'Unknown database error';
+            $msg = "DB write failed for secret {$secret_id}: {$db_error}";
+            error_log("[EmbeddingService] {$msg}");
+            psai_set_last_error($secret_id, "Embedding DB storage error: {$db_error}");
             return false;
         }
         return true;
