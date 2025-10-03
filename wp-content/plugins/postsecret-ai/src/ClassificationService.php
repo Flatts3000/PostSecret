@@ -121,10 +121,17 @@ final class ClassificationService
 
             // Convert to WebP after classification (so AI sees original format)
             if (get_post_meta($front_id, '_ps_needs_webp_conversion', true)) {
-                Ingress::convert_to_webp($front_id);
+                $webp_success = Ingress::convert_to_webp($front_id);
+                if (!$webp_success) {
+                    // Non-fatal: log error but keep flag for retry
+                    error_log("WebP conversion failed for front attachment {$front_id}");
+                }
             }
             if ($back_id && get_post_meta($back_id, '_ps_needs_webp_conversion', true)) {
-                Ingress::convert_to_webp($back_id);
+                $webp_success = Ingress::convert_to_webp($back_id);
+                if (!$webp_success) {
+                    error_log("WebP conversion failed for back attachment {$back_id}");
+                }
             }
 
             // Clear any previous errors on success

@@ -201,9 +201,6 @@ final class Ingress
             return false;
         }
 
-        // Delete original file
-        @unlink($file_path);
-
         // Update attachment metadata
         update_attached_file($att_id, $saved['path']);
 
@@ -213,21 +210,27 @@ final class Ingress
             'post_mime_type' => 'image/webp',
         ]);
 
-        // Update attachment metadata with new dimensions/size
-        $metadata = [
-            'width' => $width,
-            'height' => $height,
-            'file' => wp_basename($saved['path']),
-            'filesize' => filesize($saved['path']),
-        ];
-
         // Generate thumbnails for WebP
         require_once ABSPATH . 'wp-admin/includes/image.php';
         $metadata = wp_generate_attachment_metadata($att_id, $saved['path']);
+        if (empty($metadata)) {
+            // Metadata generation failed - restore original state
+            update_attached_file($att_id, $file_path);
+            wp_update_post([
+                'ID' => $att_id,
+                'post_mime_type' => wp_check_filetype($file_path)['type'] ?? 'image/jpeg',
+            ]);
+            @unlink($webp_path);
+            return false;
+        }
+
         wp_update_attachment_metadata($att_id, $metadata);
 
-        // Re-index with new hash
+        // Re-index with new hash (only after successful metadata generation)
         self::index($att_id);
+
+        // Delete original file ONLY after all operations succeed
+        @unlink($file_path);
 
         // Mark conversion complete
         delete_post_meta($att_id, '_ps_needs_webp_conversion');

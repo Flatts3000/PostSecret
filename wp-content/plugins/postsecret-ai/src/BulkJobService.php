@@ -161,24 +161,42 @@ final class BulkJobService
 
         $job_id = (int)$wpdb->insert_id;
 
-        // Create item records
-        $table_items = $wpdb->prefix . 'psai_bulk_items';
+        // Compute hashes for all files first
+        $file_hashes = [];
         foreach ($image_files as $file_path) {
             $relative_path = str_replace($staging_path, '', $file_path);
             $sha256 = @hash_file('sha256', $file_path) ?: '';
+            $file_hashes[] = [
+                'path' => $relative_path,
+                'hash' => $sha256,
+                'full_path' => $file_path,
+            ];
+        }
 
-            // Check for duplicates
-            $existing = $wpdb->get_var($wpdb->prepare(
-                "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_ps_sha256' AND meta_value = %s LIMIT 1",
-                $sha256
-            ));
+        // Batch-fetch existing hashes to avoid N queries
+        $all_hashes = array_column($file_hashes, 'hash');
+        $existing_hashes = [];
 
-            $status = $existing ? self::ITEM_SKIPPED : self::ITEM_PENDING;
+        if (!empty($all_hashes)) {
+            $placeholders = implode(',', array_fill(0, count($all_hashes), '%s'));
+            $query = $wpdb->prepare(
+                "SELECT DISTINCT meta_value FROM {$wpdb->postmeta}
+                 WHERE meta_key = '_ps_sha256' AND meta_value IN ({$placeholders})",
+                ...$all_hashes
+            );
+            $results = $wpdb->get_col($query);
+            $existing_hashes = array_flip($results); // Use as lookup set
+        }
+
+        // Create item records
+        $table_items = $wpdb->prefix . 'psai_bulk_items';
+        foreach ($file_hashes as $file_data) {
+            $status = isset($existing_hashes[$file_data['hash']]) ? self::ITEM_SKIPPED : self::ITEM_PENDING;
 
             $wpdb->insert($table_items, [
                 'job_id' => $job_id,
-                'file_path' => $relative_path,
-                'sha256' => $sha256,
+                'file_path' => $file_data['path'],
+                'sha256' => $file_data['hash'],
                 'status' => $status,
                 'attempts' => 0,
                 'created_at' => current_time('mysql'),
@@ -199,7 +217,7 @@ final class BulkJobService
 
     /**
      * Extract ZIP file and return image file paths.
-     * Validates each entry to prevent Zip Slip attacks.
+     * Validates each entry to prevent Zip Slip attacks and ZIP bombs.
      *
      * @param string $zip_path Path to ZIP file
      * @param string $dest_path Destination directory
@@ -222,6 +240,12 @@ final class BulkJobService
             $zip->close();
             return ['success' => false, 'error' => 'Invalid destination path.'];
         }
+
+        // ZIP bomb protection thresholds
+        $max_files = 5000;
+        $max_total_bytes = 2 * 1024 * 1024 * 1024; // 2GB
+        $cumulative_size = 0;
+        $file_count = 0;
 
         $files = [];
         $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
@@ -288,6 +312,25 @@ final class BulkJobService
             if ($content === false) {
                 error_log("Bulk upload: Failed to read entry: {$entry_name}");
                 continue;
+            }
+
+            $content_size = strlen($content);
+
+            // ZIP bomb protection: check cumulative size and file count
+            $cumulative_size += $content_size;
+            $file_count++;
+
+            if ($file_count > $max_files) {
+                $zip->close();
+                error_log("Bulk upload: ZIP bomb protection - exceeded max files ({$max_files})");
+                return ['success' => false, 'error' => "ZIP contains too many files (max {$max_files})."];
+            }
+
+            if ($cumulative_size > $max_total_bytes) {
+                $zip->close();
+                $max_gb = round($max_total_bytes / (1024 * 1024 * 1024), 1);
+                error_log("Bulk upload: ZIP bomb protection - exceeded max size ({$max_gb}GB)");
+                return ['success' => false, 'error' => "ZIP decompressed size exceeds {$max_gb}GB limit."];
             }
 
             if (file_put_contents($target_path, $content) !== false) {
@@ -494,11 +537,32 @@ final class BulkJobService
     private static function process_item(array $job, array $item): array
     {
         try {
-            $file_path = trailingslashit($job['staging_path']) . $item['file_path'];
+            // Validate and sanitize file path to prevent directory traversal
+            $staging_base = trailingslashit($job['staging_path']);
+            $staging_real = realpath($staging_base);
 
-            if (!file_exists($file_path)) {
-                return ['success' => false, 'error' => 'File not found: ' . $item['file_path']];
+            if ($staging_real === false) {
+                return ['success' => false, 'error' => 'Invalid staging directory.'];
             }
+
+            // Concatenate the paths
+            $file_path = $staging_base . $item['file_path'];
+
+            // Resolve the actual path
+            $file_real = realpath($file_path);
+
+            // Security: Verify the resolved path is within staging directory
+            if ($file_real === false || strpos($file_real, $staging_real) !== 0) {
+                error_log("Bulk upload: Path traversal attempt blocked - file_path: {$item['file_path']}");
+                return ['success' => false, 'error' => 'Invalid file path (security check failed).'];
+            }
+
+            if (!file_exists($file_real)) {
+                return ['success' => false, 'error' => 'File not found: ' . basename($item['file_path'])];
+            }
+
+            // Use the validated path for all subsequent operations
+            $file_path = $file_real;
 
             // Sideload file
             require_once ABSPATH . 'wp-admin/includes/file.php';
