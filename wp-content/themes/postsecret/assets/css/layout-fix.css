@@ -1,0 +1,82 @@
+/**
+ * Layout fixes for header and footer constraints
+ * Ensures consistent width across all page types
+ */
+
+/* Remove WordPress's automatic global padding from header/footer */
+.ps-header.has-global-padding {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* Remove global padding from all footer sections */
+.ps-footer .has-global-padding,
+.ps-footer .wp-block-group.has-global-padding,
+.ps-footer__patreon-wrapper .has-global-padding {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* Header constraint - override WordPress defaults */
+.ps-header.is-layout-constrained,
+.ps-header.wp-block-group {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+}
+
+/* Header inner content - constrained to 1200px */
+.ps-header > .wp-block-group {
+    max-width: 1200px !important;
+    width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: clamp(1rem, 3vw, 2rem) !important;
+    padding-right: clamp(1rem, 3vw, 2rem) !important;
+    box-sizing: border-box !important;
+}
+
+/* Footer outer wrapper - full width */
+.ps-footer {
+    max-width: 100% !important;
+    width: 100% !important;
+}
+
+/* Footer section wrappers - full width backgrounds */
+.ps-footer__patreon-wrapper,
+.ps-footer > .wp-block-group {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* Footer inner constrained sections - 1200px with padding */
+.ps-footer .is-layout-constrained,
+.ps-footer .wp-block-group.is-layout-constrained {
+    max-width: 1200px !important;
+    width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: clamp(1rem, 3vw, 2rem) !important;
+    padding-right: clamp(1rem, 3vw, 2rem) !important;
+    box-sizing: border-box !important;
+}
+
+/* Footer content divs - take full width of parent */
+.ps-footer__patreon,
+.ps-footer__nav,
+.ps-footer__legal {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* Main content wrapper */
+.ps-secret-detail.wp-block-group {
+    padding-left: clamp(1rem, 3vw, 2rem) !important;
+    padding-right: clamp(1rem, 3vw, 2rem) !important;
+    box-sizing: border-box !important;
+}

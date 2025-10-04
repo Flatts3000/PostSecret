@@ -75,7 +75,7 @@ add_action('rest_api_init', function () {
                     'back_id' => $back_id,
                     'back_src' => $back_src,
                     'back_alt' => $back_alt,
-                    'link' => get_attachment_link($id),
+                    'link' => get_permalink($id),
                 ];
             }
 
@@ -92,11 +92,14 @@ add_action('rest_api_init', function () {
 
 // Front-page stream (only on home)
 add_action('wp_enqueue_scripts', function () {
-    // Don't load on admin or search pages
-    if (is_admin() || is_search()) return;
+    // Only load on front page - explicitly exclude other page types
+    if (!is_front_page() || is_singular() || is_attachment() || is_search()) {
+        return;
+    }
 
     $handle = 'psai-stream';
-    wp_register_script($handle, plugins_url('assets/psai-stream.js', __FILE__), ['mustache'], null, true);
+    $version = '1.0.1'; // Version for cache busting
+    wp_register_script($handle, plugins_url('assets/psai-stream.js', __FILE__), ['mustache'], $version, true);
 
     // Pretty and legacy (query-param) endpoints
     $pretty = rest_url('psai/v1/secrets');

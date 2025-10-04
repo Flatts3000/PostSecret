@@ -78,10 +78,13 @@ final class EmbeddingService
             if (self::qdrant_enabled()) {
                 $qdrantPayload = [
                     'status' => 'public', // adjust at query time if needed
-                    'teachesWisdom' => !empty($payload['teachesWisdom']),
                     'topics' => $payload['topics'] ?? [],
                     'feelings' => $payload['feelings'] ?? [],
                     'meanings' => $payload['meanings'] ?? [],
+                    'vibe' => $payload['vibe'] ?? [],
+                    'style' => $payload['style'] ?? 'unknown',
+                    'locations' => $payload['locations'] ?? [],
+                    'wisdom' => !empty($payload['wisdom']) ? (string)$payload['wisdom'] : '',
                 ];
                 /** @var array $qdrantPayload */
                 $qdrantPayload = apply_filters('psai/embedding/qdrant-payload', $qdrantPayload, $secret_id, $payload);
@@ -527,8 +530,7 @@ final class EmbeddingService
                 'topics' => $payload['topics'] ?? [],
                 'feelings' => $payload['feelings'] ?? [],
                 'meanings' => $payload['meanings'] ?? [],
-                'frontText' => $payload['front']['text']['fullText'] ?? null,
-                'backText' => $payload['back']['text']['fullText'] ?? null,
+                'vibe' => $payload['vibe'] ?? [],
             ],
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
@@ -622,24 +624,35 @@ final class EmbeddingService
             $parts[] = 'Secret: ' . self::sanitize_space((string)$payload['secret']);
         }
 
-        // Add topics
+        // Add text-only facets
         if (!empty($payload['topics']) && is_array($payload['topics'])) {
             $parts[] = 'Topics: ' . implode(', ', array_map('self::sanitize_space', $payload['topics']));
         }
 
-        // Add feelings
         if (!empty($payload['feelings']) && is_array($payload['feelings'])) {
             $parts[] = 'Feelings: ' . implode(', ', array_map('self::sanitize_space', $payload['feelings']));
         }
 
-        // Add meanings
         if (!empty($payload['meanings']) && is_array($payload['meanings'])) {
             $parts[] = 'Meanings: ' . implode(', ', array_map('self::sanitize_space', $payload['meanings']));
         }
 
-        // Add extracted text if available
-        if (!empty($payload['text'])) {
-            $parts[] = 'Text: ' . self::sanitize_space((string)$payload['text']);
+        // Add image+text facets
+        if (!empty($payload['vibe']) && is_array($payload['vibe'])) {
+            $parts[] = 'Vibe: ' . implode(', ', array_map('self::sanitize_space', $payload['vibe']));
+        }
+
+        if (!empty($payload['style']) && $payload['style'] !== 'unknown') {
+            $parts[] = 'Style: ' . self::sanitize_space((string)$payload['style']);
+        }
+
+        if (!empty($payload['locations']) && is_array($payload['locations'])) {
+            $parts[] = 'Locations: ' . implode(', ', array_map('self::sanitize_space', $payload['locations']));
+        }
+
+        // Add wisdom if present
+        if (!empty($payload['wisdom'])) {
+            $parts[] = 'Wisdom: ' . self::sanitize_space((string)$payload['wisdom']);
         }
 
         return implode('. ', $parts);

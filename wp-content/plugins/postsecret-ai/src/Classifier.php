@@ -73,8 +73,9 @@ final class Classifier
         $seed = isset($opts['SEED']) && $opts['SEED'] !== '' ? (int)$opts['SEED'] : null;
 
         // ── Vision options
-        $detail = in_array(($opts['VISION_DETAIL'] ?? 'high'), ['low', 'auto', 'high'], true)
-            ? (string)$opts['VISION_DETAIL']
+        $vision_detail = $opts['VISION_DETAIL'] ?? 'high';
+        $detail = in_array($vision_detail, ['low', 'auto', 'high'], true)
+            ? (string)$vision_detail
             : 'high';
 
         // ── HTTP knobs
@@ -96,9 +97,9 @@ final class Classifier
             $headers['OpenAI-Project'] = (string)$opts['OPENAI_PROJECT'];
         }
 
-        // ── Messages
+        // ── Messages (use custom prompt if configured, else built-in)
         $messages = [
-            ['role' => 'system', 'content' => Prompt::TEXT],
+            ['role' => 'system', 'content' => Prompt::get()],
             ['role' => 'user', 'content' => self::buildVisionContent($frontUrl, $backUrl, $detail)],
         ];
 

@@ -25,6 +25,10 @@ final class AdminMetaBox
         $topics = get_post_meta($post->ID, '_ps_topics', true) ?: [];
         $feelings = get_post_meta($post->ID, '_ps_feelings', true) ?: [];
         $meanings = get_post_meta($post->ID, '_ps_meanings', true) ?: [];
+        $vibe = get_post_meta($post->ID, '_ps_vibe', true) ?: [];
+        $style = get_post_meta($post->ID, '_ps_style', true) ?: 'unknown';
+        $locations = get_post_meta($post->ID, '_ps_locations', true) ?: [];
+        $wisdom = get_post_meta($post->ID, '_ps_wisdom', true) ?: '';
         $model = get_post_meta($post->ID, '_ps_model', true);
         $pver = get_post_meta($post->ID, '_ps_prompt_version', true);
         $when = get_post_meta($post->ID, '_ps_updated_at', true);
@@ -68,7 +72,7 @@ final class AdminMetaBox
         echo '<strong>Review:</strong> <span class="psai-pill psai-rv-' . esc_attr($review) . '">' . esc_html($review) . '</span><br>';
         echo '<strong>Vetted:</strong> ' . esc_html($vetted) . '</p>';
 
-        // Facets
+        // Text-only facets
         if ($topics && is_array($topics)) {
             echo '<p><strong>Topics:</strong><br>';
             foreach ($topics as $t) echo '<span class="psai-chip psai-chip-topic">' . esc_html($t) . '</span> ';
@@ -85,10 +89,26 @@ final class AdminMetaBox
             echo '</p>';
         }
 
-        // Teaches Wisdom indicator
-        $teachesWisdom = get_post_meta($post->ID, '_ps_teaches_wisdom', true);
-        if ($teachesWisdom === '1') {
-            echo '<p><strong>Teaches Wisdom:</strong> <span class="psai-badge" style="background:#fef3c7;color:#78350f;">✓ Yes</span></p>';
+        // Image+text facets
+        if ($vibe && is_array($vibe) && count($vibe) > 0) {
+            echo '<p><strong>Vibe:</strong><br>';
+            foreach ($vibe as $v) echo '<span class="psai-chip psai-chip-vibe">' . esc_html($v) . '</span> ';
+            echo '</p>';
+        }
+        if ($style && $style !== 'unknown') {
+            echo '<p><strong>Style:</strong> <span class="psai-chip psai-chip-style">' . esc_html($style) . '</span></p>';
+        }
+        if ($locations && is_array($locations) && count($locations) > 0) {
+            echo '<p><strong>Locations:</strong><br>';
+            foreach ($locations as $loc) echo '<span class="psai-chip psai-chip-location">' . esc_html($loc) . '</span> ';
+            echo '</p>';
+        }
+
+        // Wisdom
+        if ($wisdom && trim($wisdom) !== '') {
+            echo '<p><strong>Wisdom:</strong><br>';
+            echo '<em style="color:#78350f;background:#fef3c7;padding:4px 8px;border-radius:4px;display:inline-block;">' . esc_html($wisdom) . '</em>';
+            echo '</p>';
         }
 
         // Model / prompt / timestamp
@@ -258,6 +278,9 @@ final class AdminMetaBox
         .psai-chip-topic{background:#e6f3ff;color:#0c4a6e}
         .psai-chip-feeling{background:#fff4e6;color:#78350f}
         .psai-chip-meaning{background:#f0fdf4;color:#14532d}
+        .psai-chip-vibe{background:#f3e8ff;color:#581c87}
+        .psai-chip-style{background:#fef3e2;color:#78350f}
+        .psai-chip-location{background:#e0f2fe;color:#0c4a6e}
         .psai-dot{display:inline-block;font-weight:700}
         .psai-green{color:#008a20}.psai-blue{color:#2271b1}.psai-gray{color:#777}.psai-amber{color:#b95000}.psai-red{color:#b32d2e}
         .psai-box details{margin-top:6px}

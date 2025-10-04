@@ -374,7 +374,7 @@ function handle_semantic_search(WP_REST_Request $request)
             'back_id' => $back_id,
             'back_src' => $back_src,
             'back_alt' => $back_alt,
-            'link' => get_attachment_link($secret_id),
+            'link' => get_permalink($secret_id),
         ];
     }
 

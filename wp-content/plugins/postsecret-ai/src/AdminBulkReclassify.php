@@ -1,15 +1,16 @@
 <?php
 /**
- * PSAI\AdminBulkUpload
+ * PSAI\AdminBulkReclassify
  * -----------------------------------------------------------------------------
- * Bulk upload admin page: manual ZIP/image ingest with Start/Pause/Stop controls.
+ * Bulk reclassification admin page: queue existing secrets for re-classification.
  *
  * Page structure:
  * 1. Header (title + explainer)
- * 2. Upload box (dropzone + file picker)
- * 3. Job list (recent jobs table)
- * 4. Job detail pane (when job opened)
- * 5. Live updates via polling
+ * 2. Filter section (status, confidence, date range, tags)
+ * 3. Preview section (count + estimated cost)
+ * 4. Job list (recent jobs table)
+ * 5. Job detail pane (when job opened)
+ * 6. Live updates via polling
  *
  * @package PSAI
  */
@@ -22,10 +23,10 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-final class AdminBulkUpload
+final class AdminBulkReclassify
 {
     /**
-     * Render the bulk upload admin page.
+     * Render the bulk reclassification admin page.
      */
     public static function render(): void
     {
@@ -44,78 +45,124 @@ final class AdminBulkUpload
         $model = $env['MODEL_NAME'] ?? 'gpt-4o-mini';
 
         ?>
-        <div class="wrap psai-bulk-upload">
+        <div class="wrap psai-bulk-reclassify">
             <!-- Header -->
-            <h1><?php esc_html_e('PostSecret Bulk Ingest', 'postsecret-ai'); ?></h1>
+            <h1><?php esc_html_e('Bulk Reclassification', 'postsecret-ai'); ?></h1>
             <p class="description">
-                <?php esc_html_e('Upload a ZIP or images; then manually Start/Pause/Stop processing.', 'postsecret-ai'); ?>
+                <?php esc_html_e('Select secrets to reclassify with the current AI prompt and model.', 'postsecret-ai'); ?>
             </p>
 
             <?php if (!$tables_exist): ?>
                 <div class="notice notice-error">
                     <p>
                         <strong><?php esc_html_e('Database tables not found!', 'postsecret-ai'); ?></strong>
-                        <?php esc_html_e('You need to run migrations before using bulk upload.', 'postsecret-ai'); ?>
+                        <?php esc_html_e('You need to run migrations before using bulk reclassification.', 'postsecret-ai'); ?>
                     </p>
                     <p>
                         <a href="<?php echo esc_url(plugins_url('postsecret-admin/run-migrations.php')); ?>" class="button button-primary">
                             <?php esc_html_e('Run Migrations Now', 'postsecret-ai'); ?>
                         </a>
-                        <a href="<?php echo esc_url(plugins_url('postsecret-ai/check-bulk-setup.php')); ?>" class="button">
-                            <?php esc_html_e('Check Setup Status', 'postsecret-ai'); ?>
-                        </a>
                     </p>
                 </div>
             <?php endif; ?>
 
-            <!-- Upload Box -->
-            <div class="psai-upload-box card">
-                <h2><?php esc_html_e('Create New Job', 'postsecret-ai'); ?></h2>
+            <!-- Filter Box -->
+            <div class="psai-filter-box card">
+                <h2><?php esc_html_e('Select Secrets to Reclassify', 'postsecret-ai'); ?></h2>
 
-                <form id="psai-bulk-upload-form" method="post" enctype="multipart/form-data" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-                    <input type="hidden" name="action" value="psai_bulk_create_job" />
-                    <?php wp_nonce_field('psai_bulk_create_job', 'psai_bulk_nonce'); ?>
+                <form id="psai-reclassify-form">
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row">
+                                <label for="psai-status-filter"><?php esc_html_e('Status', 'postsecret-ai'); ?></label>
+                            </th>
+                            <td>
+                                <select id="psai-status-filter" name="status" class="regular-text">
+                                    <option value=""><?php esc_html_e('All statuses', 'postsecret-ai'); ?></option>
+                                    <option value="publish"><?php esc_html_e('Published', 'postsecret-ai'); ?></option>
+                                    <option value="pending"><?php esc_html_e('Pending', 'postsecret-ai'); ?></option>
+                                    <option value="draft"><?php esc_html_e('Draft', 'postsecret-ai'); ?></option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="psai-date-from"><?php esc_html_e('Date Range', 'postsecret-ai'); ?></label>
+                            </th>
+                            <td>
+                                <input type="date" id="psai-date-from" name="date_from" class="regular-text" />
+                                <span> to </span>
+                                <input type="date" id="psai-date-to" name="date_to" class="regular-text" />
+                                <p class="description"><?php esc_html_e('Filter by upload/creation date (optional)', 'postsecret-ai'); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="psai-side-filter"><?php esc_html_e('Side', 'postsecret-ai'); ?></label>
+                            </th>
+                            <td>
+                                <select id="psai-side-filter" name="side" class="regular-text">
+                                    <option value=""><?php esc_html_e('All sides', 'postsecret-ai'); ?></option>
+                                    <option value="front"><?php esc_html_e('Front only', 'postsecret-ai'); ?></option>
+                                    <option value="back"><?php esc_html_e('Back only', 'postsecret-ai'); ?></option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">
+                                <label for="psai-limit"><?php esc_html_e('Limit', 'postsecret-ai'); ?></label>
+                            </th>
+                            <td>
+                                <input type="number" id="psai-limit" name="limit" value="" min="1" max="10000" class="small-text" />
+                                <p class="description"><?php esc_html_e('Maximum number of items to process (optional, default: all matching)', 'postsecret-ai'); ?></p>
+                            </td>
+                        </tr>
+                    </table>
 
-                    <div class="psai-dropzone" id="psai-dropzone">
-                        <div class="psai-dropzone-content">
-                            <p class="psai-dropzone-icon">📦</p>
-                            <p class="psai-dropzone-text">
-                                <?php esc_html_e('Drop ZIP or images here, or click to browse', 'postsecret-ai'); ?>
-                            </p>
-                            <input
-                                type="file"
-                                name="psai_bulk_files[]"
-                                id="psai_bulk_files"
-                                accept=".zip,.jpg,.jpeg,.png,.webp"
-                                multiple
-                                style="display: none;"
-                            />
-                        </div>
-                        <div id="psai-file-list" class="psai-file-list" style="display: none;"></div>
+                    <div class="psai-filter-actions">
+                        <button type="button" class="button button-secondary" id="psai-preview-btn">
+                            <?php esc_html_e('Preview Count', 'postsecret-ai'); ?>
+                        </button>
+                        <button type="button" class="button button-primary" id="psai-create-reclassify-job-btn" disabled>
+                            <?php esc_html_e('Create Reclassification Job', 'postsecret-ai'); ?>
+                        </button>
+                        <span class="spinner" id="psai-create-spinner" style="float: none; margin-left: 8px;"></span>
                     </div>
-
-                    <p class="description">
-                        <?php esc_html_e('Supported formats: ZIP archives, JPEG, PNG, WebP. Max file size: 128MB per file.', 'postsecret-ai'); ?>
-                    </p>
-
-                    <button type="submit" class="button button-primary" id="psai-create-job-btn" disabled>
-                        <?php esc_html_e('Create Job', 'postsecret-ai'); ?>
-                    </button>
-                    <span class="spinner" id="psai-create-spinner" style="float: none; margin-left: 8px;"></span>
                 </form>
+
+                <!-- Preview Results -->
+                <div id="psai-preview-results" class="psai-preview-results" style="display: none;">
+                    <div class="notice notice-info inline">
+                        <p>
+                            <strong><?php esc_html_e('Preview:', 'postsecret-ai'); ?></strong>
+                            <span id="psai-preview-count">0</span> <?php esc_html_e('secrets will be reclassified', 'postsecret-ai'); ?>
+                        </p>
+                        <p class="description">
+                            <?php esc_html_e('Estimated API cost:', 'postsecret-ai'); ?>
+                            <strong id="psai-preview-cost">$0.00</strong>
+                            <?php
+                            printf(
+                                /* translators: %s: model name */
+                                esc_html__('(using %s)', 'postsecret-ai'),
+                                esc_html($model)
+                            );
+                            ?>
+                        </p>
+                    </div>
+                </div>
             </div>
 
             <!-- Job List -->
             <div class="psai-job-list card">
-                <h2><?php esc_html_e('Recent Jobs', 'postsecret-ai'); ?></h2>
+                <h2><?php esc_html_e('Recent Reclassification Jobs', 'postsecret-ai'); ?></h2>
                 <div id="psai-jobs-container">
                     <table class="wp-list-table widefat striped" id="psai-jobs-table">
                         <thead>
                             <tr>
                                 <th><?php esc_html_e('Job ID', 'postsecret-ai'); ?></th>
                                 <th><?php esc_html_e('Created', 'postsecret-ai'); ?></th>
-                                <th><?php esc_html_e('Source', 'postsecret-ai'); ?></th>
-                                <th><?php esc_html_e('Total Files', 'postsecret-ai'); ?></th>
+                                <th><?php esc_html_e('Filters', 'postsecret-ai'); ?></th>
+                                <th><?php esc_html_e('Total Secrets', 'postsecret-ai'); ?></th>
                                 <th><?php esc_html_e('Status', 'postsecret-ai'); ?></th>
                                 <th><?php esc_html_e('Progress', 'postsecret-ai'); ?></th>
                                 <th><?php esc_html_e('Success', 'postsecret-ai'); ?></th>
@@ -129,12 +176,12 @@ final class AdminBulkUpload
                         </tbody>
                     </table>
                     <div id="psai-jobs-empty" class="psai-empty-state" style="display: none;">
-                        <p><?php esc_html_e('No jobs yet—upload a ZIP to create one.', 'postsecret-ai'); ?></p>
+                        <p><?php esc_html_e('No reclassification jobs yet.', 'postsecret-ai'); ?></p>
                     </div>
                 </div>
             </div>
 
-            <!-- Job Detail Pane -->
+            <!-- Job Detail Pane (same as bulk upload) -->
             <div class="psai-job-detail card" id="psai-job-detail" style="display: none;">
                 <div class="psai-job-detail-header">
                     <h2 id="psai-detail-title"><?php esc_html_e('Job Detail', 'postsecret-ai'); ?></h2>
@@ -211,32 +258,13 @@ final class AdminBulkUpload
                                     type="number"
                                     id="psai-batch-size"
                                     name="batch_size"
-                                    value="25"
+                                    value="10"
                                     min="1"
-                                    max="100"
+                                    max="50"
                                     class="small-text"
                                 />
                                 <p class="description">
-                                    <?php esc_html_e('Number of items to process per step (default: 25).', 'postsecret-ai'); ?>
-                                </p>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row">
-                                <label for="psai-max-step-time"><?php esc_html_e('Max Step Time (seconds)', 'postsecret-ai'); ?></label>
-                            </th>
-                            <td>
-                                <input
-                                    type="number"
-                                    id="psai-max-step-time"
-                                    name="max_step_time"
-                                    value="8"
-                                    min="3"
-                                    max="30"
-                                    class="small-text"
-                                />
-                                <p class="description">
-                                    <?php esc_html_e('Maximum time per step to keep pages responsive (default: 8s).', 'postsecret-ai'); ?>
+                                    <?php esc_html_e('Number of items to process per step (default: 10). Lower values are safer for API rate limits.', 'postsecret-ai'); ?>
                                 </p>
                             </td>
                         </tr>
@@ -253,8 +281,7 @@ final class AdminBulkUpload
                         <table class="wp-list-table widefat fixed striped">
                             <thead>
                                 <tr>
-                                    <th><?php esc_html_e('Item ID', 'postsecret-ai'); ?></th>
-                                    <th><?php esc_html_e('File Path', 'postsecret-ai'); ?></th>
+                                    <th><?php esc_html_e('Attachment ID', 'postsecret-ai'); ?></th>
                                     <th><?php esc_html_e('Status', 'postsecret-ai'); ?></th>
                                     <th><?php esc_html_e('Attempts', 'postsecret-ai'); ?></th>
                                     <th><?php esc_html_e('Last Error', 'postsecret-ai'); ?></th>
@@ -273,30 +300,10 @@ final class AdminBulkUpload
                         <?php esc_html_e('Export Errors CSV', 'postsecret-ai'); ?>
                     </button>
                 </div>
-
-                <!-- File Handling Notes -->
-                <div class="psai-file-notes">
-                    <h3><?php esc_html_e('File Handling', 'postsecret-ai'); ?></h3>
-                    <dl>
-                        <dt><?php esc_html_e('Staging Folder:', 'postsecret-ai'); ?></dt>
-                        <dd id="psai-staging-path">—</dd>
-
-                        <dt><?php esc_html_e('Duplicate Handling:', 'postsecret-ai'); ?></dt>
-                        <dd><?php esc_html_e('Files are deduped by SHA-256; already-seen images are skipped.', 'postsecret-ai'); ?></dd>
-
-                        <dt><?php esc_html_e('Quarantine Rule:', 'postsecret-ai'); ?></dt>
-                        <dd><?php esc_html_e('Items with repeated failures (3+ attempts) are quarantined.', 'postsecret-ai'); ?></dd>
-                    </dl>
-                </div>
             </div>
 
             <!-- Footer -->
             <div class="psai-footer">
-                <p>
-                    <a href="https://docs.postsecret.com/bulk-upload" target="_blank">
-                        <?php esc_html_e('Documentation & Help', 'postsecret-ai'); ?>
-                    </a>
-                </p>
                 <p class="description">
                     <?php
                     printf(
@@ -315,18 +322,13 @@ final class AdminBulkUpload
         </div>
 
         <style>
-            .psai-bulk-upload { max-width: 100%; }
-            .psai-bulk-upload .card { padding: 20px; margin: 20px 0; background: #fff; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04); }
-            .psai-upload-box { max-width: 800px; }
+            .psai-bulk-reclassify { max-width: 100%; }
+            .psai-bulk-reclassify .card { padding: 20px; margin: 20px 0; background: #fff; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04); }
 
-            /* Upload Box */
-            .psai-dropzone { border: 2px dashed #ccd0d4; border-radius: 4px; padding: 40px; text-align: center; background: #f9f9f9; cursor: pointer; transition: all 0.3s; }
-            .psai-dropzone:hover { border-color: #2271b1; background: #f0f6fc; }
-            .psai-dropzone.dragover { border-color: #2271b1; background: #e5f2ff; }
-            .psai-dropzone-icon { font-size: 48px; margin: 0; }
-            .psai-dropzone-text { margin: 10px 0 0; color: #646970; }
-            .psai-file-list { margin-top: 20px; text-align: left; padding: 10px; background: #fff; border-radius: 4px; }
-            .psai-file-item { padding: 8px; border-bottom: 1px solid #f0f0f1; }
+            /* Filter Box */
+            .psai-filter-box { max-width: 800px; }
+            .psai-filter-actions { margin-top: 20px; display: flex; gap: 8px; align-items: center; }
+            .psai-preview-results { margin-top: 20px; }
 
             /* Job List */
             .psai-job-list { max-width: none !important; }
@@ -369,13 +371,6 @@ final class AdminBulkUpload
             .psai-errors-panel h3 { margin-top: 0; }
             .psai-errors-container { max-height: 400px; overflow-y: auto; margin-bottom: 12px; }
 
-            /* File Notes */
-            .psai-file-notes { margin: 30px 0; padding-top: 20px; border-top: 1px solid #f0f0f1; }
-            .psai-file-notes h3 { margin-top: 0; }
-            .psai-file-notes dl { display: grid; grid-template-columns: 200px 1fr; gap: 12px; }
-            .psai-file-notes dt { font-weight: 600; }
-            .psai-file-notes dd { margin: 0; color: #646970; }
-
             /* Footer */
             .psai-footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #f0f0f1; text-align: center; }
         </style>
@@ -384,61 +379,93 @@ final class AdminBulkUpload
         jQuery(document).ready(function($) {
             // State
             let currentJobId = null;
-            let isProcessing = false;
             let pollInterval = null;
 
-            // Upload box interactions
-            const $dropzone = $('#psai-dropzone');
-            const $fileInput = $('#psai_bulk_files');
-            const $fileList = $('#psai-file-list');
-            const $createBtn = $('#psai-create-job-btn');
+            // Preview count
+            $('#psai-preview-btn').on('click', function() {
+                const $btn = $(this);
+                const $spinner = $('#psai-create-spinner');
+                const $results = $('#psai-preview-results');
+                const $createBtn = $('#psai-create-reclassify-job-btn');
 
-            $dropzone.on('click', () => $fileInput.trigger('click'));
+                $spinner.addClass('is-active');
+                $btn.prop('disabled', true);
 
-            $dropzone.on('dragover dragenter', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                $dropzone.addClass('dragover');
+                const filters = {
+                    status: $('#psai-status-filter').val(),
+                    date_from: $('#psai-date-from').val(),
+                    date_to: $('#psai-date-to').val(),
+                    side: $('#psai-side-filter').val(),
+                    limit: parseInt($('#psai-limit').val()) || 0
+                };
+
+                $.post(ajaxurl, {
+                    action: 'psai_reclassify_preview',
+                    filters: filters
+                }, function(response) {
+                    $spinner.removeClass('is-active');
+                    $btn.prop('disabled', false);
+
+                    if (response.success) {
+                        const count = response.data.count || 0;
+                        const cost = response.data.estimated_cost || '$0.00';
+
+                        $('#psai-preview-count').text(count);
+                        $('#psai-preview-cost').text(cost);
+                        $results.show();
+
+                        if (count > 0) {
+                            $createBtn.prop('disabled', false);
+                        } else {
+                            $createBtn.prop('disabled', true);
+                            alert('No secrets match your filters.');
+                        }
+                    } else {
+                        alert('Error: ' + (response.data || 'Unknown error'));
+                    }
+                });
             });
 
-            $dropzone.on('dragleave dragend drop', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                $dropzone.removeClass('dragover');
-            });
+            // Create reclassification job
+            $('#psai-create-reclassify-job-btn').on('click', function() {
+                const $btn = $(this);
+                const $spinner = $('#psai-create-spinner');
 
-            $dropzone.on('drop', (e) => {
-                const files = e.originalEvent.dataTransfer.files;
-                $fileInput[0].files = files;
-                updateFileList(files);
-            });
-
-            $fileInput.on('change', function() {
-                updateFileList(this.files);
-            });
-
-            function updateFileList(files) {
-                if (!files || files.length === 0) {
-                    $fileList.hide().empty();
-                    $createBtn.prop('disabled', true);
+                if (!confirm('Are you sure you want to create a reclassification job? This will use API credits.')) {
                     return;
                 }
 
-                $fileList.empty().show();
-                $createBtn.prop('disabled', false);
+                $spinner.addClass('is-active');
+                $btn.prop('disabled', true);
 
-                Array.from(files).forEach(file => {
-                    $fileList.append(`<div class="psai-file-item">📄 ${file.name} (${formatBytes(file.size)})</div>`);
+                const filters = {
+                    status: $('#psai-status-filter').val(),
+                    date_from: $('#psai-date-from').val(),
+                    date_to: $('#psai-date-to').val(),
+                    side: $('#psai-side-filter').val(),
+                    limit: parseInt($('#psai-limit').val()) || 0
+                };
+
+                $.post(ajaxurl, {
+                    action: 'psai_reclassify_create_job',
+                    filters: filters
+                }, function(response) {
+                    $spinner.removeClass('is-active');
+                    $btn.prop('disabled', false);
+
+                    if (response.success) {
+                        alert('Reclassification job created! Opening job detail...');
+                        $('#psai-preview-results').hide();
+                        $('#psai-reclassify-form')[0].reset();
+                        loadJobs();
+                        if (response.data.job_id) {
+                            setTimeout(() => openJob(response.data.job_id), 500);
+                        }
+                    } else {
+                        alert('Error: ' + (response.data || 'Unknown error'));
+                    }
                 });
-            }
-
-            function formatBytes(bytes) {
-                if (bytes === 0) return '0 Bytes';
-                const k = 1024;
-                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-                const i = Math.floor(Math.log(bytes) / Math.log(k));
-                return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-            }
+            });
 
             // Load jobs on page load
             loadJobs();
@@ -447,7 +474,7 @@ final class AdminBulkUpload
             setInterval(loadJobs, 5000);
 
             function loadJobs() {
-                $.get(ajaxurl, { action: 'psai_bulk_list_jobs' }, function(response) {
+                $.get(ajaxurl, { action: 'psai_reclassify_list_jobs' }, function(response) {
                     if (response.success && response.data.jobs) {
                         renderJobs(response.data.jobs);
                     }
@@ -474,7 +501,7 @@ final class AdminBulkUpload
                         <tr>
                             <td><code>${job.uuid.substring(0, 8)}</code></td>
                             <td>${job.created}</td>
-                            <td>${job.source}</td>
+                            <td><small>${job.source}</small></td>
                             <td>${job.total}</td>
                             <td><span class="psai-status-pill ${job.status}">${job.status}</span></td>
                             <td>${job.processed} / ${job.total} (${progress}%)</td>
@@ -522,14 +549,13 @@ final class AdminBulkUpload
                 const progress = job.total > 0 ? Math.round((job.processed / job.total) * 100) : 0;
                 const remaining = job.total - job.processed;
 
-                $('#psai-detail-title').text(`Job: ${job.uuid.substring(0, 8)}`);
+                $('#psai-detail-title').text(`Reclassification Job: ${job.uuid.substring(0, 8)}`);
                 $('#psai-detail-status').removeClass().addClass('psai-status-pill ' + job.status).text(job.status);
                 $('#psai-detail-progress-text').text(`${job.processed} / ${job.total} (${progress}%)`);
                 $('#psai-detail-success').text(job.success_count);
                 $('#psai-detail-failed').text(job.fail_count);
                 $('#psai-detail-remaining').text(remaining);
                 $('#psai-detail-progress-bar').css('width', progress + '%');
-                $('#psai-staging-path').text(job.staging_path || '—');
 
                 // Update controls
                 const $start = $('#psai-start-btn');
@@ -589,7 +615,6 @@ final class AdminBulkUpload
                     const $row = $(`
                         <tr>
                             <td>${error.id}</td>
-                            <td><code>${error.file_path}</code></td>
                             <td>${error.status}</td>
                             <td>${error.attempts}</td>
                             <td><small>${error.last_error || '—'}</small></td>
@@ -656,10 +681,10 @@ final class AdminBulkUpload
             function processStep(jobId) {
                 if (!currentJobId || currentJobId !== jobId) return;
 
-                const batchSize = parseInt($('#psai-batch-size').val()) || 25;
+                const batchSize = parseInt($('#psai-batch-size').val()) || 10;
 
                 $.post(ajaxurl, {
-                    action: 'psai_bulk_step',
+                    action: 'psai_reclassify_step',
                     job_id: jobId,
                     batch_size: batchSize
                 }, function(response) {
@@ -714,9 +739,15 @@ final class AdminBulkUpload
                 $.post(ajaxurl, { action: 'psai_bulk_retry_failed', job_id: jobId }, function(response) {
                     $('#psai-control-spinner').removeClass('is-active');
                     if (response.success) {
-                        updateLiveStatus('Failed items requeued');
+                        const count = response.data.requeued || 0;
+                        updateLiveStatus(count + ' failed items requeued');
                         loadJobDetail(jobId);
+                    } else {
+                        alert('Error retrying failed items: ' + (response.data || 'Unknown error'));
                     }
+                }).fail(function() {
+                    $('#psai-control-spinner').removeClass('is-active');
+                    alert('Network error while retrying failed items');
                 });
             }
 
@@ -743,8 +774,7 @@ final class AdminBulkUpload
                 if (!currentJobId) return;
 
                 const settings = {
-                    batch_size: parseInt($('#psai-batch-size').val()) || 25,
-                    max_step_time: parseInt($('#psai-max-step-time').val()) || 8
+                    batch_size: parseInt($('#psai-batch-size').val()) || 10
                 };
 
                 $.post(ajaxurl, {

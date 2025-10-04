@@ -139,6 +139,11 @@ class Settings
                 $val = in_array($v, $choices, true) ? $v : ($spec['default'] ?? ($choices[0] ?? ''));
                 break;
 
+            case 'textarea':
+                // Preserve whitespace and line breaks for textarea
+                $val = is_string($v) ? $v : '';
+                break;
+
             case 'path':
             case 'str':
             default:
@@ -191,6 +196,11 @@ class Settings
                 echo '<input type="text" name="' . $name . '" value="' . esc_attr($cur) . '" style="width:420px" />';
                 $hint = !empty($spec['path_kind']) ? ' (' . $spec['path_kind'] . ')' : '';
                 echo '<p class="description">Path' . $hint . '. ' . esc_html($spec['help'] ?? '') . '</p>';
+                break;
+
+            case 'textarea':
+                echo '<textarea name="' . $name . '" rows="30" style="width:100%;max-width:1000px;font-family:monospace;font-size:12px;line-height:1.5;">' . esc_textarea($cur) . '</textarea>';
+                echo $desc;
                 break;
 
             case 'str':

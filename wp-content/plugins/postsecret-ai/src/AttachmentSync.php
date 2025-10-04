@@ -21,11 +21,13 @@ final class AttachmentSync
     {
         $containsPII = (bool)($payload['moderation']['containsPII'] ?? false);
 
-        // Combine all facets for caption
+        // Combine all facets for caption (text-only + image+text)
         $topics = is_array($payload['topics'] ?? null) ? $payload['topics'] : [];
         $feelings = is_array($payload['feelings'] ?? null) ? $payload['feelings'] : [];
         $meanings = is_array($payload['meanings'] ?? null) ? $payload['meanings'] : [];
-        $allFacets = array_merge($topics, $feelings, $meanings);
+        $vibe = is_array($payload['vibe'] ?? null) ? $payload['vibe'] : [];
+        $locations = is_array($payload['locations'] ?? null) ? $payload['locations'] : [];
+        $allFacets = array_merge($topics, $feelings, $meanings, $vibe, $locations);
 
         $secretDesc = self::clean_str($payload['secretDescription'] ?? '');
 
@@ -72,6 +74,8 @@ final class AttachmentSync
         // DESCRIPTION (objective summary from secretDescription, which is always PII-free by design)
         // Note: secretDescription is an AI-generated summary, not raw extracted text, so it's safe even when containsPII=true
         $existingDesc = is_object($existingPost) ? trim((string)$existingPost->post_content) : '';
+        // Decode HTML entities that WordPress may have encoded
+        $existingDesc = html_entity_decode($existingDesc, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         error_log("AttachmentSync: existingDesc='" . substr($existingDesc, 0, 100) . "', force_update=" . ($force_update ? 'true' : 'false') . ", containsPII=" . ($containsPII ? 'true' : 'false') . ", desc='" . substr($desc, 0, 100) . "'");
         if (($existingDesc === '' || $force_update) && $desc !== '') {
             // Strip dangerous tags but preserve text as-is (no entity encoding)

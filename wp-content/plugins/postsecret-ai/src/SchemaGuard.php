@@ -46,15 +46,13 @@ final class SchemaGuard
         'topics' => [],
         'feelings' => [],
         'meanings' => [],
+        'vibe' => [],
+        'style' => 'unknown',
+        'locations' => [],
+        'wisdom' => '',
         'secretDescription' => '',
-        'teachesWisdom' => false,
         'media' => [
             'type' => 'unknown',
-            'defects' => [
-                'overall' => self::DEF_OVERALL,
-                'defects' => [],
-            ],
-            'defectSummary' => '',
         ],
         'front' => self::DEF_SIDE,
         'back' => self::DEF_SIDE,
@@ -69,7 +67,6 @@ final class SchemaGuard
             'overall' => 0.00,
             'byField' => [
                 'facets' => 0.00,
-                'media.defects' => 0.00,
                 'artDescription' => 0.00,
                 'fontDescription' => 0.00,
                 'moderation' => 0.00,
@@ -80,14 +77,20 @@ final class SchemaGuard
     /** Allowed enums */
     private const ENUMS = [
         'media.type' => ['postcard', 'note_card', 'letter', 'photo', 'poster', 'mixed', 'unknown'],
-        'sharpness' => ['sharp', 'soft', 'blurred', 'unknown'],
-        'exposure' => ['under', 'normal', 'over', 'unknown'],
-        'colorCast' => ['neutral', 'warm', 'cool', 'mixed', 'unknown'],
-        'severity' => ['low', 'medium', 'high', 'unknown'],
-        'defect.code' => ['crease_fold', 'glare_reflection', 'shadow', 'tear', 'stain', 'ink_bleed', 'noise', 'skew', 'crop_cutoff', 'moire', 'color_shift', 'other'],
-        'where' => ['top_left', 'top', 'top_right', 'left', 'center', 'right', 'bottom_left', 'bottom', 'bottom_right', 'unknown'],
+        'vibe' => ['bittersweet', 'confessional', 'defiant', 'eerie', 'gentle', 'grim', 'hopeful', 'melancholic', 'nostalgic', 'ominous', 'playful', 'raw', 'serene', 'somber', 'tense', 'tender', 'wistful'],
+        'style' => ['art_deco', 'abstract', 'minimalism', 'collage', 'pop_art', 'surrealism', 'expressionism', 'bauhaus', 'constructivist', 'grunge', 'vaporwave', 'doodle', 'cutout', 'watercolor', 'oil_painting', 'pencil_sketch', 'photomontage', 'glitch', 'pixel_art', 'graffiti', 'calligraphic', 'stencil', 'typographic', 'realist_photo', 'mixed_media', 'unknown'],
         'font.style' => ['handwritten', 'typed', 'stenciled', 'mixed', 'unknown'],
         'reviewStatus' => ['auto_vetted', 'needs_review', 'reject_candidate'],
+        'moderation.labels' => [
+            // Policy-routing labels
+            'self_harm_mention', 'self_harm_instructions', 'threat', 'extremism_promotion',
+            'hate_violence', 'sexual_violence', 'sexual_content', 'minors_context', 'ncii',
+            'fraud_malware', 'illicit_instructions', 'targeted_harassment', 'pii_present_strong', 'slur_present',
+            // Reader-facing warning labels
+            'suicide_mention', 'violence', 'abuse', 'child_abuse', 'death_grief', 'eating_disorder',
+            'substance_use', 'pregnancy_loss', 'abortion', 'crime_illegal_activity',
+            'stalking_harassment', 'weapons', 'blood_gore',
+        ],
         'lang' => null, // any ISO 639-1 or "unknown"; we just lowercase
         'piiTypes' => ['name', 'email', 'phone', 'address', 'other'],
     ];
@@ -99,30 +102,24 @@ final class SchemaGuard
 
         $out = self::DEF_PAYLOAD;
 
-        // facets
+        // facets (text-only)
         $out['topics'] = self::norm_list($p['topics'] ?? [], maxLen: 4);
         $out['feelings'] = self::norm_list($p['feelings'] ?? [], maxLen: 3);
         $out['meanings'] = self::norm_list($p['meanings'] ?? [], maxLen: 2);
 
+        // facets (image+text)
+        $out['vibe'] = self::norm_list($p['vibe'] ?? [], maxLen: 2, allowed: self::ENUMS['vibe']);
+        $out['style'] = self::enum($p['style'] ?? 'unknown', 'style');
+        $out['locations'] = self::norm_list($p['locations'] ?? [], maxLen: 5);
+
+        // wisdom (text-only)
+        $out['wisdom'] = self::truncate_words(self::norm_str($p['wisdom'] ?? ''), 25);
+
         // secretDescription
         $out['secretDescription'] = self::norm_str($p['secretDescription'] ?? '');
 
-        // teachesWisdom
-        $out['teachesWisdom'] = (bool)($p['teachesWisdom'] ?? false);
-
         // media
         $out['media']['type'] = self::enum($p['media']['type'] ?? 'unknown', 'media.type');
-        $ov = $p['media']['defects']['overall'] ?? [];
-        $out['media']['defects']['overall'] = [
-            'sharpness' => self::enum($ov['sharpness'] ?? 'unknown', 'sharpness'),
-            'exposure' => self::enum($ov['exposure'] ?? 'unknown', 'exposure'),
-            'colorCast' => self::enum($ov['colorCast'] ?? 'unknown', 'colorCast'),
-            'severity' => self::enum($ov['severity'] ?? 'unknown', 'severity'),
-            'notes' => self::norm_str($ov['notes'] ?? ''),
-        ];
-        $defArr = is_array($p['media']['defects']['defects'] ?? null) ? $p['media']['defects']['defects'] : [];
-        $out['media']['defects']['defects'] = self::norm_defects($defArr, 3);
-        $out['media']['defectSummary'] = self::truncate_chars(self::norm_str($p['media']['defectSummary'] ?? ''), 120);
 
         // front & back blocks
         $out['front'] = self::norm_side($p['front'] ?? null);
@@ -133,7 +130,7 @@ final class SchemaGuard
         $m = $p['moderation'] ?? [];
         $out['moderation'] = [
             'reviewStatus' => self::enum($m['reviewStatus'] ?? 'auto_vetted', 'reviewStatus'),
-            'labels' => self::norm_list($m['labels'] ?? [], maxLen: 20),
+            'labels' => self::norm_list($m['labels'] ?? [], maxLen: 6, allowed: self::ENUMS['moderation.labels']),
             'nsfwScore' => self::f01($m['nsfwScore'] ?? 0.00),
             'containsPII' => (bool)($m['containsPII'] ?? false),
             'piiTypes' => self::norm_list($m['piiTypes'] ?? [], allowed: self::ENUMS['piiTypes']),
@@ -146,7 +143,6 @@ final class SchemaGuard
             'overall' => self::f01($c['overall'] ?? 0.00),
             'byField' => [
                 'facets' => self::f01($bf['facets'] ?? 0.00),
-                'media.defects' => self::f01($bf['media.defects'] ?? 0.00),
                 'artDescription' => self::f01($bf['artDescription'] ?? 0.00),
                 'fontDescription' => self::f01($bf['fontDescription'] ?? 0.00),
                 'moderation' => self::f01($bf['moderation'] ?? 0.00),
@@ -276,5 +272,13 @@ final class SchemaGuard
     {
         if (mb_strlen($s, 'UTF-8') <= $limit) return $s;
         return mb_substr($s, 0, $limit, 'UTF-8');
+    }
+
+    private static function truncate_words(string $s, int $maxWords): string
+    {
+        if ($s === '') return '';
+        $words = preg_split('/\s+/u', $s);
+        if (count($words) <= $maxWords) return $s;
+        return implode(' ', array_slice($words, 0, $maxWords));
     }
 }
