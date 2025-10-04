@@ -108,9 +108,32 @@ final class ClassificationService
                 update_post_meta($back_id, '_ps_pair_id', $front_id);
                 update_post_meta($back_id, '_ps_side', 'back');
                 update_post_meta($back_id, '_ps_payload', $payload);
-                update_post_meta($back_id, '_ps_topics', get_post_meta($front_id, '_ps_topics', true));
-                update_post_meta($back_id, '_ps_feelings', get_post_meta($front_id, '_ps_feelings', true));
-                update_post_meta($back_id, '_ps_meanings', get_post_meta($front_id, '_ps_meanings', true));
+
+                // Mirror facets
+                $topics = get_post_meta($front_id, '_ps_topics', true);
+                $feelings = get_post_meta($front_id, '_ps_feelings', true);
+                $meanings = get_post_meta($front_id, '_ps_meanings', true);
+                $vibe = get_post_meta($front_id, '_ps_vibe', true);
+                $style = get_post_meta($front_id, '_ps_style', true);
+                $locations = get_post_meta($front_id, '_ps_locations', true);
+
+                update_post_meta($back_id, '_ps_topics', $topics);
+                update_post_meta($back_id, '_ps_feelings', $feelings);
+                update_post_meta($back_id, '_ps_meanings', $meanings);
+                update_post_meta($back_id, '_ps_vibe', $vibe);
+                update_post_meta($back_id, '_ps_style', $style);
+                update_post_meta($back_id, '_ps_locations', $locations);
+
+                // Sync facets to junction table for back attachment
+                \psai_sync_facets_to_table($back_id, [
+                    'topics' => $topics ?: [],
+                    'feelings' => $feelings ?: [],
+                    'meanings' => $meanings ?: [],
+                    'vibe' => $vibe ?: [],
+                    'style' => $style ? [$style] : [],
+                    'locations' => $locations ?: [],
+                ]);
+
                 update_post_meta($back_id, '_ps_model', get_post_meta($front_id, '_ps_model', true));
                 update_post_meta($back_id, '_ps_prompt_version', get_post_meta($front_id, '_ps_prompt_version', true));
                 update_post_meta($back_id, '_ps_updated_at', wp_date('c'));

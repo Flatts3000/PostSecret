@@ -29,6 +29,43 @@ $selected_style = isset( $_GET['style'] ) ? (array) $_GET['style'] : [];
 $selected_topics = isset( $_GET['topics'] ) ? (array) $_GET['topics'] : [];
 $selected_vibe = isset( $_GET['vibe'] ) ? (array) $_GET['vibe'] : [];
 
+// Get search query and date range
+$search_query = isset( $_GET['q'] ) ? sanitize_text_field( $_GET['q'] ) : '';
+$start_date = isset( $_GET['start_date'] ) ? sanitize_text_field( $_GET['start_date'] ) : '';
+$end_date = isset( $_GET['end_date'] ) ? sanitize_text_field( $_GET['end_date'] ) : '';
+
+// Execute search if we have any filters
+$has_filters = ! empty( $search_query ) ||
+               ! empty( $start_date ) ||
+               ! empty( $end_date ) ||
+               ! empty( $selected_feelings ) ||
+               ! empty( $selected_locations ) ||
+               ! empty( $selected_meanings ) ||
+               ! empty( $selected_style ) ||
+               ! empty( $selected_topics ) ||
+               ! empty( $selected_vibe );
+
+$search_results = null;
+if ( $has_filters ) {
+	$current_page = isset( $_GET['paged'] ) ? max( 1, intval( $_GET['paged'] ) ) : 1;
+
+	$search_results = $search_service->search(
+		$search_query,
+		[
+			'feelings' => $selected_feelings,
+			'locations' => $selected_locations,
+			'meanings' => $selected_meanings,
+			'style' => $selected_style,
+			'topics' => $selected_topics,
+			'vibe' => $selected_vibe,
+		],
+		$current_page,
+		24, // per_page
+		$start_date,
+		$end_date
+	);
+}
+
 // Create nonce for AJAX requests
 $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
 ?>
@@ -362,13 +399,135 @@ $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
             </section>
         </form>
 
-        <!-- Results Placeholder -->
-        <section class="ps-results-section" id="resultsSection" style="display: none;">
-            <h2 class="ps-section-label">Results</h2>
-            <div id="resultsContainer" class="ps-results-grid">
-                <!-- Results will be populated here via AJAX or page load -->
-            </div>
+        <!-- Results Section -->
+        <?php if ( $search_results ) : ?>
+        <section class="ps-results-section" id="resultsSection">
+            <header class="ps-results-header">
+                <h2 class="ps-section-label">
+                    <i class="fa-solid fa-grid-2" aria-hidden="true"></i>
+                    Search Results
+                </h2>
+                <p class="ps-results-meta">
+                    Found <strong><?php echo number_format( $search_results['total'] ); ?></strong> secrets
+                    <?php if ( $search_results['total'] > $search_results['per_page'] ) : ?>
+                        (Page <?php echo $search_results['page']; ?> of <?php echo $search_results['total_pages']; ?>)
+                    <?php endif; ?>
+                </p>
+            </header>
+
+            <?php if ( ! empty( $search_results['posts'] ) ) : ?>
+                <div id="resultsContainer" class="ps-results-grid">
+                    <?php foreach ( $search_results['posts'] as $post ) : ?>
+                        <?php
+                        setup_postdata( $post );
+                        $attachment_id = $post->ID;
+                        $image_url = wp_get_attachment_image_url( $attachment_id, 'medium' );
+                        $full_url = wp_get_attachment_url( $attachment_id );
+
+                        // Get facets
+                        $topics = get_post_meta( $attachment_id, '_ps_topics', true );
+                        $feelings = get_post_meta( $attachment_id, '_ps_feelings', true );
+                        $meanings = get_post_meta( $attachment_id, '_ps_meanings', true );
+                        $all_facets = array_merge(
+                            is_array( $topics ) ? $topics : [],
+                            is_array( $feelings ) ? $feelings : [],
+                            is_array( $meanings ) ? $meanings : []
+                        );
+
+                        // Get text
+                        $text = get_post_meta( $attachment_id, '_ps_text', true );
+                        $excerpt = ! empty( $text ) ? wp_trim_words( $text, 20, '...' ) : '';
+
+                        // Get dates
+                        $submission_date = get_post_meta( $attachment_id, '_ps_submission_date', true );
+                        $display_date = ! empty( $submission_date ) ? $submission_date : get_the_date( 'Y-m-d', $post );
+                        ?>
+                        <article class="ps-result-card">
+                            <a href="<?php echo esc_url( get_attachment_link( $attachment_id ) ); ?>" class="ps-result-link">
+                                <?php if ( $image_url ) : ?>
+                                    <div class="ps-result-image">
+                                        <img src="<?php echo esc_url( $image_url ); ?>" alt="<?php echo esc_attr( get_the_title( $post ) ?: 'PostSecret' ); ?>" loading="lazy" />
+                                    </div>
+                                <?php endif; ?>
+
+                                <div class="ps-result-content">
+                                    <?php if ( ! empty( $all_facets ) ) : ?>
+                                        <div class="ps-result-facets">
+                                            <?php
+                                            $display_facets = array_slice( $all_facets, 0, 3 );
+                                            $overflow_count = count( $all_facets ) - 3;
+                                            ?>
+                                            <?php foreach ( $display_facets as $facet ) : ?>
+                                                <span class="ps-result-facet-chip"><?php echo esc_html( $facet ); ?></span>
+                                            <?php endforeach; ?>
+                                            <?php if ( $overflow_count > 0 ) : ?>
+                                                <span class="ps-result-facet-chip ps-result-facet-overflow">+<?php echo $overflow_count; ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
+
+                                    <?php if ( $excerpt ) : ?>
+                                        <p class="ps-result-excerpt"><?php echo esc_html( $excerpt ); ?></p>
+                                    <?php endif; ?>
+
+                                    <time class="ps-result-date" datetime="<?php echo esc_attr( $display_date ); ?>">
+                                        <?php echo esc_html( date( 'F j, Y', strtotime( $display_date ) ) ); ?>
+                                    </time>
+                                </div>
+                            </a>
+                        </article>
+                    <?php endforeach; ?>
+                    <?php wp_reset_postdata(); ?>
+                </div>
+
+                <?php if ( $search_results['total_pages'] > 1 ) : ?>
+                    <nav class="ps-pagination" aria-label="Search results pagination">
+                        <?php
+                        // Build pagination URL
+                        $base_url = remove_query_arg( 'paged', $_SERVER['REQUEST_URI'] );
+                        $page = $search_results['page'];
+                        $total_pages = $search_results['total_pages'];
+                        ?>
+
+                        <?php if ( $page > 1 ) : ?>
+                            <a href="<?php echo esc_url( add_query_arg( 'paged', $page - 1, $base_url ) ); ?>" class="ps-pagination-btn ps-pagination-prev">
+                                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                                Previous
+                            </a>
+                        <?php else : ?>
+                            <span class="ps-pagination-btn ps-pagination-prev ps-pagination-disabled" aria-disabled="true">
+                                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                                Previous
+                            </span>
+                        <?php endif; ?>
+
+                        <span class="ps-pagination-info">
+                            Page <?php echo $page; ?> of <?php echo $total_pages; ?>
+                        </span>
+
+                        <?php if ( $page < $total_pages ) : ?>
+                            <a href="<?php echo esc_url( add_query_arg( 'paged', $page + 1, $base_url ) ); ?>" class="ps-pagination-btn ps-pagination-next">
+                                Next
+                                <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                            </a>
+                        <?php else : ?>
+                            <span class="ps-pagination-btn ps-pagination-next ps-pagination-disabled" aria-disabled="true">
+                                Next
+                                <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                            </span>
+                        <?php endif; ?>
+                    </nav>
+                <?php endif; ?>
+
+            <?php else : ?>
+                <div class="ps-no-results">
+                    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                    <h3>No secrets found</h3>
+                    <p>Try adjusting your filters or date range to see more results.</p>
+                </div>
+            <?php endif; ?>
         </section>
+        <?php endif; ?>
 
     </article>
 
@@ -1086,15 +1245,246 @@ html[data-theme="dark"] .ps-validation-message.success {
     border-color: #4ade80;
 }
 
+/* ========================================
+   RESULTS SECTION
+   ======================================== */
 .ps-results-section {
     margin-top: clamp(2rem, 4vw, 3rem);
     padding-top: clamp(2rem, 4vw, 3rem);
     border-top: 2px solid var(--wp--preset--color--accent);
 }
 
+.ps-results-header {
+    margin-bottom: clamp(1.5rem, 3vw, 2rem);
+}
+
+.ps-results-meta {
+    font-size: 0.875rem;
+    color: var(--wp--preset--color--muted);
+    margin-top: 0.5rem;
+}
+
+.ps-results-meta strong {
+    color: var(--wp--preset--color--accent);
+    font-weight: 600;
+}
+
 .ps-results-grid {
     display: grid;
     gap: clamp(1.5rem, 3vw, 2rem);
+    grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+    .ps-results-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 1024px) {
+    .ps-results-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Result Card */
+.ps-result-card {
+    background: var(--wp--preset--color--bg);
+    border: 1px solid var(--wp--preset--color--border);
+    border-radius: 0;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.ps-result-card:hover {
+    border-color: var(--wp--preset--color--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+html[data-theme="dark"] .ps-result-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ps-result-card {
+        transition: none;
+    }
+
+    .ps-result-card:hover {
+        transform: none;
+    }
+}
+
+.ps-result-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+}
+
+.ps-result-link:focus-visible {
+    outline: 2px solid var(--wp--preset--color--accent);
+    outline-offset: 2px;
+}
+
+.ps-result-image {
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    overflow: hidden;
+    background: var(--wp--preset--color--tint);
+}
+
+.ps-result-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.ps-result-content {
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.ps-result-facets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+
+.ps-result-facet-chip {
+    display: inline-block;
+    padding: 0.25rem 0.625rem;
+    background: var(--wp--preset--color--accent);
+    color: #ffffff;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    border-radius: 9999px;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.ps-result-facet-overflow {
+    background: var(--wp--preset--color--muted);
+}
+
+.ps-result-excerpt {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--wp--preset--color--text);
+    margin: 0;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+}
+
+.ps-result-date {
+    font-size: 0.75rem;
+    color: var(--wp--preset--color--muted);
+    font-weight: 500;
+}
+
+/* No Results */
+.ps-no-results {
+    text-align: center;
+    padding: clamp(3rem, 6vw, 5rem) clamp(1rem, 2vw, 2rem);
+    color: var(--wp--preset--color--muted);
+}
+
+.ps-no-results i {
+    font-size: clamp(3rem, 6vw, 4rem);
+    color: var(--wp--preset--color--border);
+    margin-bottom: 1.5rem;
+}
+
+.ps-no-results h3 {
+    font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+    font-weight: 600;
+    color: var(--wp--preset--color--text);
+    margin: 0 0 0.75rem 0;
+}
+
+.ps-no-results p {
+    font-size: 1rem;
+    margin: 0;
+}
+
+/* ========================================
+   PAGINATION
+   ======================================== */
+.ps-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: clamp(2rem, 4vw, 3rem);
+    padding-top: clamp(1.5rem, 3vw, 2rem);
+    border-top: 1px solid var(--wp--preset--color--border);
+}
+
+.ps-pagination-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: transparent;
+    border: 1px solid var(--wp--preset--color--border);
+    border-radius: 0;
+    color: var(--wp--preset--color--text);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 44px;
+}
+
+.ps-pagination-btn:hover,
+.ps-pagination-btn:focus {
+    background: var(--wp--preset--color--tint);
+    border-color: var(--wp--preset--color--accent);
+    color: var(--wp--preset--color--accent);
+}
+
+.ps-pagination-btn:focus-visible {
+    outline: 2px solid var(--wp--preset--color--accent);
+    outline-offset: 2px;
+}
+
+.ps-pagination-btn.ps-pagination-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ps-pagination-btn.ps-pagination-disabled:hover {
+    background: transparent;
+    border-color: var(--wp--preset--color--border);
+    color: var(--wp--preset--color--text);
+}
+
+.ps-pagination-info {
+    font-size: 0.875rem;
+    color: var(--wp--preset--color--muted);
+    font-weight: 500;
+}
+
+@media (min-width: 768px) {
+    .ps-pagination {
+        justify-content: center;
+    }
+
+    .ps-pagination-btn {
+        padding: 0.875rem 1.5rem;
+        font-size: 0.9375rem;
+    }
+
+    .ps-pagination-info {
+        font-size: 1rem;
+        min-width: 140px;
+        text-align: center;
+    }
 }
 
 /* Desktop */

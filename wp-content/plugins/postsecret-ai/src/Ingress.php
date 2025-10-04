@@ -263,6 +263,20 @@ function psai_store_result(int $att_id, array $payload, string $model): void
     sort($vibe);
     sort($locations);
 
+    // Extract full text for searchability
+    $full_text = trim((string)($payload['text']['fullText'] ?? ''));
+    $language = (string)($payload['text']['language'] ?? 'unknown');
+
+    // Store extracted text in post_content for MySQL FULLTEXT search
+    // This is much faster than searching postmeta
+    if (!empty($full_text)) {
+        wp_update_post([
+            'ID' => $att_id,
+            'post_content' => $full_text,
+        ]);
+    }
+
+    // Store in postmeta (legacy, for backwards compatibility and detailed fields)
     update_post_meta($att_id, '_ps_payload', $payload);
     update_post_meta($att_id, '_ps_topics', $topics);
     update_post_meta($att_id, '_ps_feelings', $feelings);
@@ -271,9 +285,28 @@ function psai_store_result(int $att_id, array $payload, string $model): void
     update_post_meta($att_id, '_ps_style', (string)($payload['style'] ?? 'unknown'));
     update_post_meta($att_id, '_ps_locations', $locations);
     update_post_meta($att_id, '_ps_wisdom', (string)($payload['wisdom'] ?? ''));
+    update_post_meta($att_id, '_ps_text', $full_text);
+    update_post_meta($att_id, '_ps_language', $language);
     update_post_meta($att_id, '_ps_model', $model);
     update_post_meta($att_id, '_ps_prompt_version', $promptVer);
     update_post_meta($att_id, '_ps_updated_at', wp_date('c'));
+
+    // Submission date (if provided in payload or previously set, preserve it)
+    // This is the actual date the secret was submitted/created, not upload date
+    // Falls back to upload date in queries if not set
+    if (!empty($payload['submission_date'])) {
+        update_post_meta($att_id, '_ps_submission_date', $payload['submission_date']);
+    }
+
+    // Sync to facet junction table (optimized for search/filtering)
+    psai_sync_facets_to_table($att_id, [
+        'topics' => $topics,
+        'feelings' => $feelings,
+        'meanings' => $meanings,
+        'vibe' => $vibe,
+        'style' => [(string)($payload['style'] ?? 'unknown')],
+        'locations' => $locations,
+    ]);
 
     // Vetted flags (store as strings for WP meta_query)
     $review = $payload['moderation']['reviewStatus'] ?? 'auto_vetted';
@@ -283,6 +316,44 @@ function psai_store_result(int $att_id, array $payload, string $model): void
     // Optional: sync attachment Alt/Caption/Description from payload (if you use it)
     if (class_exists('\PSAI\AttachmentSync')) {
         \PSAI\AttachmentSync::sync_from_payload($att_id, $payload, null);
+    }
+}
+
+/**
+ * Sync facets to ps_secret_facets junction table.
+ *
+ * Replaces all facets for a secret with the new values (delete + insert).
+ * This is more efficient than trying to diff and update individual rows.
+ *
+ * @param int $secret_id Attachment ID
+ * @param array $facets Array of facet_type => values arrays
+ */
+function psai_sync_facets_to_table(int $secret_id, array $facets): void
+{
+    global $wpdb;
+
+    $table_name = $wpdb->prefix . 'ps_secret_facets';
+
+    // Delete existing facets for this secret
+    $wpdb->delete($table_name, ['secret_id' => $secret_id], ['%d']);
+
+    // Insert new facets
+    foreach ($facets as $facet_type => $values) {
+        if (!empty($values) && is_array($values)) {
+            foreach ($values as $value) {
+                if (!empty($value)) {
+                    $wpdb->insert(
+                        $table_name,
+                        [
+                            'secret_id' => $secret_id,
+                            'facet_type' => $facet_type,
+                            'facet_value' => $value,
+                        ],
+                        ['%d', '%s', '%s']
+                    );
+                }
+            }
+        }
     }
 }
 
