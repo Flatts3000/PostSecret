@@ -7,7 +7,7 @@ if (!defined('ABSPATH')) exit;
 final class Prompt
 {
     // bump when TEXT changes
-    public const VERSION = '5.0.1';
+    public const VERSION = '5.0.2';
 
     /**
      * Get the prompt text, with support for custom prompts from settings.
@@ -101,7 +101,9 @@ final class Prompt
 * **Format:** An array of normalized keywords in `lower_snake_case` (ASCII; no diacritics or punctuation).
 * **Examples:** `["chicago", "statue_of_liberty"]`
 * **Visual cues allowed:** iconic landmarks, distinctive skylines/bridges, license plates (state name only), national flags (country only). Generic scenery (e.g., a random beach) → omit.
-* **Exclusions:** **Do not include** any official PostSecret mailing addresses (PO boxes or street addresses tied to PostSecret) or obvious variants.
+* **Exclusions (PostSecret addresses):** Never emit locations for the project’s mailing addresses or variants:
+    28241 Crown Valley Pkwy F-224, Laguna Niguel, CA 92677 (match crown valley (parkway|pkwy), unit f[-\s]?224 or #\s?f?224, ZIP 92677(-\d{4})?) and
+    13345 Copper Ridge Rd, Germantown, MD 20874 (match copper ridge (road|rd), ZIP 20874(-\d{4})?). Treat spacing/punctuation/case as flexible.
 * **Ambiguity:** If a token can be a person or a place (e.g., “jordan”) and context is unclear, omit.
 
 ### Wisdom (text-only)

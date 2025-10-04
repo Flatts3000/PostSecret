@@ -96,9 +96,24 @@ while (have_posts()) :
     $font_style = get_post_meta($front_id, '_ps_font_style', true);
     $media_type = get_post_meta($front_id, '_ps_media_type', true);
 
-    // Approved text (PII-safe)
-    $approved_text = get_the_content();
-    $language = get_post_meta($front_id, '_ps_language', true) ?: 'en';
+    // Get full text from front face (from AI payload)
+    $payload = get_post_meta($front_id, '_ps_payload', true);
+    $front_text = '';
+    $language = 'en';
+    $secret_description = '';
+    $front_art_description = '';
+    $back_art_description = '';
+    if (is_array($payload)) {
+        if (isset($payload['front']['text'])) {
+            $front_text = $payload['front']['text']['fullText'] ?? '';
+            $language = $payload['front']['text']['language'] ?? 'en';
+        }
+        $secret_description = $payload['secretDescription'] ?? '';
+        $front_art_description = $payload['front']['artDescription'] ?? '';
+        if (isset($payload['back']['artDescription'])) {
+            $back_art_description = $payload['back']['artDescription'];
+        }
+    }
 
     // Image data
     $image_url = wp_get_attachment_image_url($front_id, 'full');
@@ -187,12 +202,12 @@ while (have_posts()) :
             <!-- Content section -->
             <div id="ps-secret-content" class="ps-secret__content">
 
-                <!-- Approved text -->
-                <?php if (!empty($approved_text)) : ?>
+                <!-- Full text from front face -->
+                <?php if (!empty($front_text)) : ?>
                     <section class="ps-secret__text" itemprop="description">
                         <h2 class="ps-secret__section-title"><?php esc_html_e('Text', 'postsecret'); ?></h2>
                         <div class="ps-secret__text-content" lang="<?php echo esc_attr($language); ?>">
-                            <?php echo wp_kses_post(wpautop($approved_text)); ?>
+                            <?php echo wp_kses_post(wpautop($front_text)); ?>
                         </div>
                         <?php if ($language !== 'en') : ?>
                             <p class="ps-secret__language-label">
@@ -206,6 +221,14 @@ while (have_posts()) :
                                 ?>
                             </p>
                         <?php endif; ?>
+                    </section>
+                <?php endif; ?>
+
+                <!-- Secret Summary -->
+                <?php if (!empty($secret_description)) : ?>
+                    <section class="ps-secret__description">
+                        <h2 class="ps-secret__section-title"><?php esc_html_e('Summary', 'postsecret'); ?></h2>
+                        <p><?php echo esc_html($secret_description); ?></p>
                     </section>
                 <?php endif; ?>
 
@@ -250,20 +273,33 @@ while (have_posts()) :
 
                         <?php if (!empty($wisdom)) : ?>
                             <div class="ps-wisdom-quote">
-                                <i class="fa-solid fa-lightbulb" aria-hidden="true"></i>
                                 <blockquote class="ps-wisdom-text">
-                                    <?php echo esc_html($wisdom); ?>
+                                    <i class="fa-solid fa-lightbulb" aria-hidden="true"></i> <?php echo esc_html($wisdom); ?>
                                 </blockquote>
                             </div>
                         <?php endif; ?>
                     </section>
                 <?php endif; ?>
 
-                <!-- Descriptors (art/font/media/orientation) -->
-                <?php if ($style || $art_style || $font_style || $media_type || $orientation) : ?>
+                <!-- Style (combined panel) -->
+                <?php if ($style || $art_style || $font_style || $media_type || $orientation || $front_art_description || $back_art_description || $primary_color) : ?>
                     <section class="ps-secret__descriptors">
                         <h2 class="ps-secret__section-title"><?php esc_html_e('Style', 'postsecret'); ?></h2>
                         <dl class="ps-descriptor-list">
+                            <?php if (!empty($front_art_description)) : ?>
+                                <div class="ps-descriptor">
+                                    <dt><?php esc_html_e('Front Art', 'postsecret'); ?></dt>
+                                    <dd><?php echo esc_html($front_art_description); ?></dd>
+                                </div>
+                            <?php endif; ?>
+
+                            <?php if (!empty($back_art_description)) : ?>
+                                <div class="ps-descriptor">
+                                    <dt><?php esc_html_e('Back Art', 'postsecret'); ?></dt>
+                                    <dd><?php echo esc_html($back_art_description); ?></dd>
+                                </div>
+                            <?php endif; ?>
+
                             <?php if (!empty($style) && $style !== 'unknown') : ?>
                                 <div class="ps-descriptor">
                                     <dt><?php esc_html_e('Visual Style', 'postsecret'); ?></dt>
