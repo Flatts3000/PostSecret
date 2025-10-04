@@ -429,6 +429,89 @@ $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
                 </p>
             </header>
 
+            <?php
+            // Collect all active filters
+            $active_filters = [];
+
+            // Text search
+            if ( ! empty( $search_query ) ) {
+                $active_filters[] = [
+                    'type'  => 'query',
+                    'label' => 'Search: "' . $search_query . '"',
+                    'value' => $search_query,
+                    'param' => 'q',
+                ];
+            }
+
+            // Date range
+            if ( ! empty( $start_date ) && ! empty( $end_date ) ) {
+                $active_filters[] = [
+                    'type'  => 'date_range',
+                    'label' => date( 'M j, Y', strtotime( $start_date ) ) . ' – ' . date( 'M j, Y', strtotime( $end_date ) ),
+                    'value' => '',
+                    'param' => 'dates',
+                ];
+            }
+
+            // Facets
+            foreach ( [ 'feelings', 'locations', 'meanings', 'style', 'topics', 'vibe' ] as $facet_type ) {
+                $selected_var = 'selected_' . $facet_type;
+                if ( ! empty( $$selected_var ) ) {
+                    foreach ( $$selected_var as $facet_value ) {
+                        $active_filters[] = [
+                            'type'  => 'facet',
+                            'label' => ps_humanize_facet( $facet_value ),
+                            'value' => $facet_value,
+                            'param' => $facet_type,
+                        ];
+                    }
+                }
+            }
+            ?>
+
+            <?php if ( ! empty( $active_filters ) ) : ?>
+                <div class="ps-active-filters">
+                    <div class="ps-active-filters-header">
+                        <span class="ps-active-filters-label">Active Filters:</span>
+                        <a href="<?php echo esc_url( strtok( $_SERVER['REQUEST_URI'], '?' ) ); ?>" class="ps-clear-all-filters">
+                            Clear All
+                        </a>
+                    </div>
+                    <div class="ps-active-filters-list">
+                        <?php foreach ( $active_filters as $filter ) : ?>
+                            <?php
+                            // Build removal URL
+                            $remove_url = $_SERVER['REQUEST_URI'];
+
+                            if ( $filter['type'] === 'query' ) {
+                                $remove_url = remove_query_arg( 'q', $remove_url );
+                            } elseif ( $filter['type'] === 'date_range' ) {
+                                $remove_url = remove_query_arg( [ 'start_date', 'end_date' ], $remove_url );
+                            } elseif ( $filter['type'] === 'facet' ) {
+                                // Remove this specific facet value
+                                $current_values = isset( $_GET[ $filter['param'] ] ) ? (array) $_GET[ $filter['param'] ] : [];
+                                $new_values = array_diff( $current_values, [ $filter['value'] ] );
+
+                                if ( empty( $new_values ) ) {
+                                    $remove_url = remove_query_arg( $filter['param'], $remove_url );
+                                } else {
+                                    $remove_url = add_query_arg( $filter['param'], $new_values, remove_query_arg( $filter['param'], $remove_url ) );
+                                }
+                            }
+
+                            // Reset to page 1 when removing a filter
+                            $remove_url = remove_query_arg( 'paged', $remove_url );
+                            ?>
+                            <a href="<?php echo esc_url( $remove_url ); ?>" class="ps-filter-chip" title="Remove filter: <?php echo esc_attr( $filter['label'] ); ?>">
+                                <span class="ps-filter-chip-label"><?php echo esc_html( $filter['label'] ); ?></span>
+                                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                                <span class="sr-only">Remove</span>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <?php if ( ! empty( $search_results['posts'] ) ) : ?>
                 <div id="resultsContainer" class="ps-results-grid">
                     <?php foreach ( $search_results['posts'] as $post ) : ?>
@@ -1281,6 +1364,132 @@ html[data-theme="dark"] .ps-validation-message.success {
 .ps-results-meta strong {
     color: var(--wp--preset--color--accent);
     font-weight: 600;
+}
+
+/* Active Filters Chips */
+.ps-active-filters {
+    background: var(--wp--preset--color--tint);
+    border: 1px solid var(--wp--preset--color--border);
+    border-radius: 0;
+    padding: clamp(1rem, 2vw, 1.25rem);
+    margin-bottom: clamp(1.5rem, 3vw, 2rem);
+}
+
+.ps-active-filters-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--wp--preset--color--border);
+}
+
+.ps-active-filters-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--wp--preset--color--text);
+}
+
+.ps-clear-all-filters {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--wp--preset--color--accent);
+    text-decoration: none;
+    transition: opacity 0.2s ease;
+}
+
+.ps-clear-all-filters:hover,
+.ps-clear-all-filters:focus {
+    opacity: 0.7;
+    text-decoration: underline;
+}
+
+.ps-active-filters-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.ps-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--wp--preset--color--bg);
+    border: 1px solid var(--wp--preset--color--accent);
+    border-radius: 9999px;
+    color: var(--wp--preset--color--text);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    min-height: 36px;
+}
+
+.ps-filter-chip:hover,
+.ps-filter-chip:focus {
+    background: var(--wp--preset--color--accent);
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.ps-filter-chip:focus-visible {
+    outline: 2px solid var(--wp--preset--color--accent);
+    outline-offset: 2px;
+}
+
+.ps-filter-chip-label {
+    line-height: 1.2;
+}
+
+.ps-filter-chip i {
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+.ps-filter-chip:hover i,
+.ps-filter-chip:focus i {
+    opacity: 1;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ps-filter-chip {
+        transition: none;
+    }
+
+    .ps-filter-chip:hover {
+        transform: none;
+    }
+}
+
+@media (min-width: 768px) {
+    .ps-active-filters-label {
+        font-size: 0.875rem;
+    }
+
+    .ps-clear-all-filters {
+        font-size: 0.875rem;
+    }
+
+    .ps-filter-chip {
+        padding: 0.625rem 1rem;
+        font-size: 0.9375rem;
+    }
 }
 
 .ps-results-grid {
