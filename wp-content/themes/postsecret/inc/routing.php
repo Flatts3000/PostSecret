@@ -61,11 +61,19 @@ add_filter( 'attachment_link', __NAMESPACE__ . '\\filter_secret_attachment_perma
 function add_secret_rewrite_rules() {
     // Add the rewrite tag first
     add_rewrite_tag( '%secret_id%', '([0-9]+)' );
+    add_rewrite_tag( '%time_machine%', '([^/]+)' );
 
     // Add the rewrite rule
     add_rewrite_rule(
         '^secrets/([0-9]+)/?$',
         'index.php?secret_id=$matches[1]',
+        'top'
+    );
+
+    // Add Time Machine rewrite rule
+    add_rewrite_rule(
+        '^time-machine/?$',
+        'index.php?time_machine=1',
         'top'
     );
 }
@@ -79,6 +87,7 @@ add_action( 'init', __NAMESPACE__ . '\\add_secret_rewrite_rules', 10, 0 );
  */
 function add_secret_query_vars( $vars ) {
     $vars[] = 'secret_id';
+    $vars[] = 'time_machine';
     return $vars;
 }
 add_filter( 'query_vars', __NAMESPACE__ . '\\add_secret_query_vars' );
@@ -93,6 +102,14 @@ add_filter( 'query_vars', __NAMESPACE__ . '\\add_secret_query_vars' );
  * @return string Modified template path.
  */
 function use_secret_template_for_attachments( $template ) {
+    // Handle Time Machine page
+    if ( get_query_var( 'time_machine' ) ) {
+        $time_machine_template = locate_template( 'page-time-machine.php' );
+        if ( $time_machine_template ) {
+            return $time_machine_template;
+        }
+    }
+
     // Handle direct attachment URLs (e.g., ?attachment_id=123)
     if ( is_attachment() ) {
         $post_id = get_queried_object_id();
