@@ -13,6 +13,20 @@ header('Cache-Control: public, max-age=300, s-maxage=600');
 // Get facet values for dropdowns
 use PostSecret\Admin\Services\SearchService;
 
+/**
+ * Convert underscore_case to Human Readable format.
+ *
+ * @param string $value The underscore_case string.
+ * @return string Human readable string.
+ */
+function ps_humanize_facet( string $value ): string {
+	// Replace underscores with spaces
+	$human = str_replace( '_', ' ', $value );
+	// Capitalize first letter of each word
+	$human = ucwords( $human );
+	return $human;
+}
+
 $search_service = new SearchService();
 $feelings_facets = $search_service->get_facet_values( 'feelings' );
 $locations_facets = $search_service->get_facet_values( 'locations' );
@@ -195,7 +209,7 @@ $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
                                         class="ps-facet-pill ps-facet-pill--feeling <?php echo in_array( $facet['value'], $selected_feelings, true ) ? 'selected' : ''; ?>"
                                         data-value="<?php echo esc_attr( $facet['value'] ); ?>"
                                         aria-pressed="<?php echo in_array( $facet['value'], $selected_feelings, true ) ? 'true' : 'false'; ?>">
-                                        <?php echo esc_html( $facet['value'] ); ?>
+                                        <?php echo esc_html( ps_humanize_facet( $facet['value'] ) ); ?>
                                         <span class="ps-facet-count">(<?php echo esc_html( $facet['count'] ); ?>)</span>
                                     </button>
                                 <?php endforeach; ?>
@@ -206,7 +220,7 @@ $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
                         </div>
                         <div id="feelingsInputs" class="ps-facet-inputs">
                             <?php foreach ( $selected_feelings as $feeling ) : ?>
-                                <input type="hidden" name="feelings[]" value="<?php echo esc_attr( $feeling ); ?>">
+                                <input type="hidden" name="feelings[]" value="<?php echo esc_attr( $feeling ); ?>" data-value="<?php echo esc_attr( $feeling ); ?>">
                             <?php endforeach; ?>
                         </div>
                     </div>
@@ -225,7 +239,7 @@ $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
                                         class="ps-facet-pill ps-facet-pill--location <?php echo in_array( $facet['value'], $selected_locations, true ) ? 'selected' : ''; ?>"
                                         data-value="<?php echo esc_attr( $facet['value'] ); ?>"
                                         aria-pressed="<?php echo in_array( $facet['value'], $selected_locations, true ) ? 'true' : 'false'; ?>">
-                                        <?php echo esc_html( $facet['value'] ); ?>
+                                        <?php echo esc_html( ps_humanize_facet( $facet['value'] ) ); ?>
                                         <span class="ps-facet-count">(<?php echo esc_html( $facet['count'] ); ?>)</span>
                                     </button>
                                 <?php endforeach; ?>
@@ -236,7 +250,7 @@ $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
                         </div>
                         <div id="locationsInputs" class="ps-facet-inputs">
                             <?php foreach ( $selected_locations as $location ) : ?>
-                                <input type="hidden" name="locations[]" value="<?php echo esc_attr( $location ); ?>">
+                                <input type="hidden" name="locations[]" value="<?php echo esc_attr( $location ); ?>" data-value="<?php echo esc_attr( $location ); ?>">
                             <?php endforeach; ?>
                         </div>
                     </div>
@@ -255,7 +269,7 @@ $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
                                         class="ps-facet-pill ps-facet-pill--meaning <?php echo in_array( $facet['value'], $selected_meanings, true ) ? 'selected' : ''; ?>"
                                         data-value="<?php echo esc_attr( $facet['value'] ); ?>"
                                         aria-pressed="<?php echo in_array( $facet['value'], $selected_meanings, true ) ? 'true' : 'false'; ?>">
-                                        <?php echo esc_html( $facet['value'] ); ?>
+                                        <?php echo esc_html( ps_humanize_facet( $facet['value'] ) ); ?>
                                         <span class="ps-facet-count">(<?php echo esc_html( $facet['count'] ); ?>)</span>
                                     </button>
                                 <?php endforeach; ?>
@@ -266,7 +280,7 @@ $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
                         </div>
                         <div id="meaningsInputs" class="ps-facet-inputs">
                             <?php foreach ( $selected_meanings as $meaning ) : ?>
-                                <input type="hidden" name="meanings[]" value="<?php echo esc_attr( $meaning ); ?>">
+                                <input type="hidden" name="meanings[]" value="<?php echo esc_attr( $meaning ); ?>" data-value="<?php echo esc_attr( $meaning ); ?>">
                             <?php endforeach; ?>
                         </div>
                     </div>
@@ -285,7 +299,7 @@ $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
                                         class="ps-facet-pill ps-facet-pill--style <?php echo in_array( $facet['value'], $selected_style, true ) ? 'selected' : ''; ?>"
                                         data-value="<?php echo esc_attr( $facet['value'] ); ?>"
                                         aria-pressed="<?php echo in_array( $facet['value'], $selected_style, true ) ? 'true' : 'false'; ?>">
-                                        <?php echo esc_html( $facet['value'] ); ?>
+                                        <?php echo esc_html( ps_humanize_facet( $facet['value'] ) ); ?>
                                         <span class="ps-facet-count">(<?php echo esc_html( $facet['count'] ); ?>)</span>
                                     </button>
                                 <?php endforeach; ?>
@@ -296,7 +310,7 @@ $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
                         </div>
                         <div id="styleInputs" class="ps-facet-inputs">
                             <?php foreach ( $selected_style as $style_val ) : ?>
-                                <input type="hidden" name="style[]" value="<?php echo esc_attr( $style_val ); ?>">
+                                <input type="hidden" name="style[]" value="<?php echo esc_attr( $style_val ); ?>" data-value="<?php echo esc_attr( $style_val ); ?>">
                             <?php endforeach; ?>
                         </div>
                     </div>
@@ -315,7 +329,7 @@ $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
                                         class="ps-facet-pill ps-facet-pill--topic <?php echo in_array( $facet['value'], $selected_topics, true ) ? 'selected' : ''; ?>"
                                         data-value="<?php echo esc_attr( $facet['value'] ); ?>"
                                         aria-pressed="<?php echo in_array( $facet['value'], $selected_topics, true ) ? 'true' : 'false'; ?>">
-                                        <?php echo esc_html( $facet['value'] ); ?>
+                                        <?php echo esc_html( ps_humanize_facet( $facet['value'] ) ); ?>
                                         <span class="ps-facet-count">(<?php echo esc_html( $facet['count'] ); ?>)</span>
                                     </button>
                                 <?php endforeach; ?>
@@ -326,7 +340,7 @@ $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
                         </div>
                         <div id="topicsInputs" class="ps-facet-inputs">
                             <?php foreach ( $selected_topics as $topic ) : ?>
-                                <input type="hidden" name="topics[]" value="<?php echo esc_attr( $topic ); ?>">
+                                <input type="hidden" name="topics[]" value="<?php echo esc_attr( $topic ); ?>" data-value="<?php echo esc_attr( $topic ); ?>">
                             <?php endforeach; ?>
                         </div>
                     </div>
@@ -345,7 +359,7 @@ $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
                                         class="ps-facet-pill ps-facet-pill--vibe <?php echo in_array( $facet['value'], $selected_vibe, true ) ? 'selected' : ''; ?>"
                                         data-value="<?php echo esc_attr( $facet['value'] ); ?>"
                                         aria-pressed="<?php echo in_array( $facet['value'], $selected_vibe, true ) ? 'true' : 'false'; ?>">
-                                        <?php echo esc_html( $facet['value'] ); ?>
+                                        <?php echo esc_html( ps_humanize_facet( $facet['value'] ) ); ?>
                                         <span class="ps-facet-count">(<?php echo esc_html( $facet['count'] ); ?>)</span>
                                     </button>
                                 <?php endforeach; ?>
@@ -356,7 +370,7 @@ $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
                         </div>
                         <div id="vibeInputs" class="ps-facet-inputs">
                             <?php foreach ( $selected_vibe as $vibe_val ) : ?>
-                                <input type="hidden" name="vibe[]" value="<?php echo esc_attr( $vibe_val ); ?>">
+                                <input type="hidden" name="vibe[]" value="<?php echo esc_attr( $vibe_val ); ?>" data-value="<?php echo esc_attr( $vibe_val ); ?>">
                             <?php endforeach; ?>
                         </div>
                     </div>
@@ -458,7 +472,7 @@ $facets_nonce = wp_create_nonce( 'ps_facets_nonce' );
                                             $overflow_count = count( $all_facets ) - 3;
                                             ?>
                                             <?php foreach ( $display_facets as $facet ) : ?>
-                                                <span class="ps-result-facet-chip"><?php echo esc_html( $facet ); ?></span>
+                                                <span class="ps-result-facet-chip"><?php echo esc_html( ps_humanize_facet( $facet ) ); ?></span>
                                             <?php endforeach; ?>
                                             <?php if ( $overflow_count > 0 ) : ?>
                                                 <span class="ps-result-facet-chip ps-result-facet-overflow">+<?php echo $overflow_count; ?></span>
@@ -1798,6 +1812,13 @@ html[data-theme="dark"] .ps-result-card:hover {
             });
         }
 
+        function humanizeFacet(value) {
+            // Replace underscores with spaces and capitalize first letter of each word
+            return value.replace(/_/g, ' ').replace(/\b\w/g, function(char) {
+                return char.toUpperCase();
+            });
+        }
+
         function createFacetPill(value, count, facetType) {
             const pill = document.createElement('button');
             pill.type = 'button';
@@ -1814,7 +1835,9 @@ html[data-theme="dark"] .ps-result-card:hover {
             pill.setAttribute('data-value', value);
             pill.setAttribute('aria-pressed', 'false');
 
-            pill.innerHTML = value + ' <span class="ps-facet-count">(' + count + ')</span>';
+            // Use humanized label for display
+            const humanLabel = humanizeFacet(value);
+            pill.innerHTML = humanLabel + ' <span class="ps-facet-count">(' + count + ')</span>';
 
             pill.addEventListener('click', function() {
                 toggleFacetPill(this);
