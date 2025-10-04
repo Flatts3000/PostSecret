@@ -15,6 +15,9 @@ if (!is_attachment()) {
     wp_redirect(home_url('/'));
     exit;
 }
+
+// Cache headers (set early before any output)
+header('Cache-Control: public, max-age=300, s-maxage=600'); // 5min browser, 10min CDN
 ?>
 <!DOCTYPE html>
 <html <?php language_attributes(); ?>>
@@ -118,9 +121,6 @@ while (have_posts()) :
     $post_date = get_the_date('c');
     $date_display = get_the_date();
     $canonical_url = get_permalink();
-
-    // Cache headers (set via filter, processed by WordPress/CDN)
-    header('Cache-Control: public, max-age=300, s-maxage=600'); // 5min browser, 10min CDN
 
     ?>
 

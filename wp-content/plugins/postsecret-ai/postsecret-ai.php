@@ -34,6 +34,7 @@ require __DIR__ . '/src/Settings.php';
 require __DIR__ . '/src/AdminPage.php';
 require __DIR__ . '/src/AdminSingleUpload.php';
 require __DIR__ . '/src/AdminBulkUpload.php';
+require __DIR__ . '/src/AdminBulkReclassify.php';
 require __DIR__ . '/src/AdminMetaBox.php';
 require __DIR__ . '/src/AdminPromptEditor.php';
 
@@ -119,6 +120,15 @@ add_action('admin_menu', function () {
         'manage_options',
         'psai_bulk_upload',
         ['PSAI\\AdminBulkUpload', 'render']
+    );
+
+    add_submenu_page(
+        'psai_postcards',
+        'Bulk Reclassify',
+        'Bulk Reclassify',
+        'manage_options',
+        'psai_bulk_reclassify',
+        ['PSAI\\AdminBulkReclassify', 'render']
     );
 
     add_submenu_page(
@@ -647,6 +657,374 @@ add_action('admin_notices', function() {
         delete_transient('_ps_bulk_error');
         echo '<div class="notice notice-error is-dismissible"><p>Error: ' . esc_html($error ?: 'Unknown error') . '</p></div>';
     }
+});
+
+/* ---------------------------------------------------------------------------
+ * Bulk Reclassification AJAX handlers
+ * ------------------------------------------------------------------------- */
+
+// Preview reclassification count
+add_action('wp_ajax_psai_reclassify_preview', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $filters = isset($_POST['filters']) ? (array)$_POST['filters'] : [];
+
+    // Build query args
+    $args = [
+        'post_type' => 'attachment',
+        'post_mime_type' => 'image',
+        'post_status' => 'inherit',
+        'posts_per_page' => -1,
+        'fields' => 'ids',
+        'meta_query' => [
+            'relation' => 'AND',
+        ],
+    ];
+
+    // Apply filters
+    if (!empty($filters['status'])) {
+        $args['post_parent__in'] = get_posts([
+            'post_type' => 'secret',
+            'post_status' => sanitize_key($filters['status']),
+            'fields' => 'ids',
+            'posts_per_page' => -1,
+        ]);
+    }
+
+    if (!empty($filters['side'])) {
+        $args['meta_query'][] = [
+            'key' => '_ps_side',
+            'value' => sanitize_key($filters['side']),
+        ];
+    }
+
+    if (!empty($filters['date_from'])) {
+        $args['date_query'] = [
+            'after' => sanitize_text_field($filters['date_from']),
+        ];
+    }
+
+    if (!empty($filters['date_to'])) {
+        if (!isset($args['date_query'])) {
+            $args['date_query'] = [];
+        }
+        $args['date_query']['before'] = sanitize_text_field($filters['date_to']);
+    }
+
+    // Get count
+    $query = new WP_Query($args);
+    $count = $query->found_posts;
+
+    // Apply limit if specified
+    if (!empty($filters['limit']) && (int)$filters['limit'] > 0) {
+        $count = min($count, (int)$filters['limit']);
+    }
+
+    // Estimate cost (rough estimate: $0.0015 per image for gpt-4o-mini vision)
+    $env = get_option(\PSAI\Settings::OPTION, \PSAI\Settings::defaults());
+    $model = $env['MODEL_NAME'] ?? 'gpt-4o-mini';
+
+    $cost_per_image = 0.0015; // Default for gpt-4o-mini
+    if (strpos($model, 'gpt-4o') !== false && strpos($model, 'mini') === false) {
+        $cost_per_image = 0.005; // gpt-4o is more expensive
+    }
+
+    $estimated_cost = '$' . number_format($count * $cost_per_image, 2);
+
+    wp_send_json_success([
+        'count' => $count,
+        'estimated_cost' => $estimated_cost,
+    ]);
+});
+
+// Create reclassification job
+add_action('wp_ajax_psai_reclassify_create_job', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $filters = isset($_POST['filters']) ? (array)$_POST['filters'] : [];
+
+    // Build query args (same as preview)
+    $args = [
+        'post_type' => 'attachment',
+        'post_mime_type' => 'image',
+        'post_status' => 'inherit',
+        'posts_per_page' => -1,
+        'fields' => 'ids',
+        'meta_query' => [
+            'relation' => 'AND',
+        ],
+    ];
+
+    // Apply filters
+    if (!empty($filters['status'])) {
+        $args['post_parent__in'] = get_posts([
+            'post_type' => 'secret',
+            'post_status' => sanitize_key($filters['status']),
+            'fields' => 'ids',
+            'posts_per_page' => -1,
+        ]);
+    }
+
+    if (!empty($filters['side'])) {
+        $args['meta_query'][] = [
+            'key' => '_ps_side',
+            'value' => sanitize_key($filters['side']),
+        ];
+    }
+
+    if (!empty($filters['date_from'])) {
+        $args['date_query'] = [
+            'after' => sanitize_text_field($filters['date_from']),
+        ];
+    }
+
+    if (!empty($filters['date_to'])) {
+        if (!isset($args['date_query'])) {
+            $args['date_query'] = [];
+        }
+        $args['date_query']['before'] = sanitize_text_field($filters['date_to']);
+    }
+
+    // Get attachment IDs
+    $query = new WP_Query($args);
+    $attachment_ids = $query->posts;
+
+    // Apply limit if specified
+    if (!empty($filters['limit']) && (int)$filters['limit'] > 0) {
+        $attachment_ids = array_slice($attachment_ids, 0, (int)$filters['limit']);
+    }
+
+    if (empty($attachment_ids)) {
+        wp_send_json_error('No attachments match your filters.');
+    }
+
+    // Create job
+    global $wpdb;
+    $table_jobs = $wpdb->prefix . 'psai_bulk_jobs';
+    $table_items = $wpdb->prefix . 'psai_bulk_items';
+
+    $job_uuid = wp_generate_uuid4();
+
+    // Build source description from filters
+    $source_parts = [];
+    if (!empty($filters['status'])) $source_parts[] = 'status:' . $filters['status'];
+    if (!empty($filters['side'])) $source_parts[] = 'side:' . $filters['side'];
+    if (!empty($filters['date_from']) || !empty($filters['date_to'])) {
+        $date_range = [];
+        if (!empty($filters['date_from'])) $date_range[] = $filters['date_from'];
+        $date_range[] = 'to';
+        if (!empty($filters['date_to'])) $date_range[] = $filters['date_to'];
+        $source_parts[] = implode(' ', $date_range);
+    }
+    if (!empty($filters['limit'])) $source_parts[] = 'limit:' . $filters['limit'];
+    $source = 'reclassify:' . (count($source_parts) > 0 ? implode(', ', $source_parts) : 'all');
+
+    $wpdb->insert($table_jobs, [
+        'uuid' => $job_uuid,
+        'status' => \PSAI\BulkJobService::STATUS_NEW,
+        'source' => $source,
+        'staging_path' => '', // Not used for reclassification
+        'total_items' => count($attachment_ids),
+        'processed_items' => 0,
+        'success_count' => 0,
+        'fail_count' => 0,
+        'created_at' => current_time('mysql'),
+        'updated_at' => current_time('mysql'),
+    ]);
+
+    $job_id = $wpdb->insert_id;
+
+    // Insert items as "reclassify" tasks (use file_path to store attachment_id)
+    foreach ($attachment_ids as $att_id) {
+        $wpdb->insert($table_items, [
+            'job_id' => $job_id,
+            'file_path' => 'attachment:' . $att_id, // Store attachment ID in file_path
+            'sha256' => '', // Not used for reclassification
+            'status' => \PSAI\BulkJobService::ITEM_PENDING,
+            'attempts' => 0,
+            'created_at' => current_time('mysql'),
+            'updated_at' => current_time('mysql'),
+        ]);
+    }
+
+    wp_send_json_success(['job_id' => $job_id]);
+});
+
+// List reclassification jobs (reuse existing bulk job list, filter by source)
+add_action('wp_ajax_psai_reclassify_list_jobs', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    global $wpdb;
+    $table_jobs = $wpdb->prefix . 'psai_bulk_jobs';
+
+    $jobs = $wpdb->get_results(
+        "SELECT * FROM {$table_jobs}
+         WHERE source LIKE 'reclassify:%'
+         ORDER BY created_at DESC
+         LIMIT 50",
+        ARRAY_A
+    );
+
+    // Format for display
+    $formatted = array_map(function($job) {
+        return [
+            'id' => (int)$job['id'],
+            'uuid' => $job['uuid'],
+            'status' => $job['status'],
+            'source' => $job['source'],
+            'total' => (int)$job['total_items'],
+            'processed' => (int)$job['processed_items'],
+            'success_count' => (int)$job['success_count'],
+            'fail_count' => (int)$job['fail_count'],
+            'last_error' => $job['last_error'],
+            'created' => mysql2date('M j, Y g:i a', $job['created_at']),
+        ];
+    }, $jobs);
+
+    wp_send_json_success(['jobs' => $formatted]);
+});
+
+// Process reclassification step
+add_action('wp_ajax_psai_reclassify_step', function() {
+    if (!current_user_can('manage_options')) wp_die('Unauthorized', 403);
+
+    $job_id = isset($_POST['job_id']) ? (int)$_POST['job_id'] : 0;
+    $batch_size = isset($_POST['batch_size']) ? (int)$_POST['batch_size'] : 10;
+
+    if (!$job_id) wp_send_json_error('Invalid job ID');
+
+    global $wpdb;
+    $table_jobs = $wpdb->prefix . 'psai_bulk_jobs';
+    $table_items = $wpdb->prefix . 'psai_bulk_items';
+
+    // Get job
+    $job = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table_jobs} WHERE id = %d", $job_id), ARRAY_A);
+    if (!$job || $job['status'] !== \PSAI\BulkJobService::STATUS_RUNNING) {
+        wp_send_json_error('Job is not running');
+    }
+
+    // Get pending items
+    $items = $wpdb->get_results($wpdb->prepare(
+        "SELECT * FROM {$table_items}
+         WHERE job_id = %d AND status = %s
+         ORDER BY id ASC
+         LIMIT %d",
+        $job_id,
+        \PSAI\BulkJobService::ITEM_PENDING,
+        $batch_size
+    ), ARRAY_A);
+
+    if (empty($items)) {
+        // No more items - mark job as completed
+        $wpdb->update($table_jobs, [
+            'status' => \PSAI\BulkJobService::STATUS_COMPLETED,
+            'completed_at' => current_time('mysql'),
+            'updated_at' => current_time('mysql'),
+        ], ['id' => $job_id]);
+
+        wp_send_json_success([
+            'status' => \PSAI\BulkJobService::STATUS_COMPLETED,
+            'has_more' => false,
+        ]);
+    }
+
+    // Process each item (reclassify)
+    $success = 0;
+    $failed = 0;
+
+    foreach ($items as $item) {
+        $item_id = (int)$item['id'];
+
+        // Extract attachment ID from file_path (format: "attachment:123")
+        $file_path = $item['file_path'];
+        if (strpos($file_path, 'attachment:') === 0) {
+            $att_id = (int)substr($file_path, strlen('attachment:'));
+
+            // Reclassify
+            try {
+                $wpdb->update($table_items, [
+                    'status' => \PSAI\BulkJobService::ITEM_PROCESSING,
+                    'attempts' => (int)$item['attempts'] + 1,
+                    'updated_at' => current_time('mysql'),
+                ], ['id' => $item_id]);
+
+                // Get API key and model from settings
+                $env = get_option(\PSAI\Settings::OPTION, \PSAI\Settings::defaults());
+                $api_key = $env['API_KEY'] ?? '';
+                $model = $env['MODEL_NAME'] ?? 'gpt-4o-mini';
+
+                if (empty($api_key)) {
+                    throw new \Exception('API key not configured');
+                }
+
+                // Generate data URLs (same as ClassificationService - works with localhost)
+                $frontSrc = \PSAI\psai_make_data_url($att_id);
+
+                // Check if there's a back side
+                $pair_id = (int) get_post_meta($att_id, '_ps_pair_id', true);
+                $backSrc = $pair_id ? \PSAI\psai_make_data_url($pair_id) : null;
+
+                // Classify (throws exception on error)
+                $payload = \PSAI\Classifier::classify($api_key, $model, $frontSrc, $backSrc);
+
+                // Store classification result
+                \PSAI\psai_store_result($att_id, $payload, $model);
+
+                // Mark success
+                $wpdb->update($table_items, [
+                    'status' => \PSAI\BulkJobService::ITEM_SUCCESS,
+                    'updated_at' => current_time('mysql'),
+                ], ['id' => $item_id]);
+
+                $success++;
+
+            } catch (\Exception $e) {
+                $error_msg = $e->getMessage();
+
+                $wpdb->update($table_items, [
+                    'status' => \PSAI\BulkJobService::ITEM_ERROR,
+                    'last_error' => substr($error_msg, 0, 500),
+                    'updated_at' => current_time('mysql'),
+                ], ['id' => $item_id]);
+
+                $wpdb->update($table_jobs, [
+                    'last_error' => substr($error_msg, 0, 500),
+                    'updated_at' => current_time('mysql'),
+                ], ['id' => $job_id]);
+
+                $failed++;
+            }
+        }
+    }
+
+    // Update job stats
+    $wpdb->query($wpdb->prepare(
+        "UPDATE {$table_jobs} SET
+         processed_items = processed_items + %d,
+         success_count = success_count + %d,
+         fail_count = fail_count + %d,
+         updated_at = %s
+         WHERE id = %d",
+        $success + $failed,
+        $success,
+        $failed,
+        current_time('mysql'),
+        $job_id
+    ));
+
+    // Check if more items remain
+    $remaining = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM {$table_items}
+         WHERE job_id = %d AND status = %s",
+        $job_id,
+        \PSAI\BulkJobService::ITEM_PENDING
+    ));
+
+    wp_send_json_success([
+        'status' => \PSAI\BulkJobService::STATUS_RUNNING,
+        'has_more' => $remaining > 0,
+        'processed' => $success + $failed,
+    ]);
 });
 
 /* ---------------------------------------------------------------------------

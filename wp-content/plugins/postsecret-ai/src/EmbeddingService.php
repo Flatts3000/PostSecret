@@ -530,8 +530,7 @@ final class EmbeddingService
                 'topics' => $payload['topics'] ?? [],
                 'feelings' => $payload['feelings'] ?? [],
                 'meanings' => $payload['meanings'] ?? [],
-                'frontText' => $payload['front']['text']['fullText'] ?? null,
-                'backText' => $payload['back']['text']['fullText'] ?? null,
+                'vibe' => $payload['vibe'] ?? [],
             ],
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
@@ -654,11 +653,6 @@ final class EmbeddingService
         // Add wisdom if present
         if (!empty($payload['wisdom'])) {
             $parts[] = 'Wisdom: ' . self::sanitize_space((string)$payload['wisdom']);
-        }
-
-        // Add extracted text if available
-        if (!empty($payload['text'])) {
-            $parts[] = 'Text: ' . self::sanitize_space((string)$payload['text']);
         }
 
         return implode('. ', $parts);

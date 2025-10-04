@@ -73,8 +73,9 @@ final class Classifier
         $seed = isset($opts['SEED']) && $opts['SEED'] !== '' ? (int)$opts['SEED'] : null;
 
         // ── Vision options
-        $detail = in_array(($opts['VISION_DETAIL'] ?? 'high'), ['low', 'auto', 'high'], true)
-            ? (string)$opts['VISION_DETAIL']
+        $vision_detail = $opts['VISION_DETAIL'] ?? 'high';
+        $detail = in_array($vision_detail, ['low', 'auto', 'high'], true)
+            ? (string)$vision_detail
             : 'high';
 
         // ── HTTP knobs
