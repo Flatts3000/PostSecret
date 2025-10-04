@@ -4,6 +4,7 @@ declare(strict_types=1);
 // Load theme includes
 require_once get_stylesheet_directory() . '/inc/routing.php';
 require_once get_stylesheet_directory() . '/inc/seo.php';
+require_once get_stylesheet_directory() . '/inc/ajax-facets.php';
 
 // Enqueue scripts and styles
 add_action('wp_enqueue_scripts', function () {

@@ -19,12 +19,12 @@
     const MAX_DOM_CARDS = 240;   // ~10 pages @ 24 each
     const PRUNE_BATCH = 60;
 
-    // ----- Mount (self-heal if missing) -----
+    // ----- Mount -----
+    // Only run if the mount element exists in the DOM (don't create it)
     let root = document.getElementById(MOUNT_ID);
     if (!root) {
-        root = document.createElement('div');
-        root.id = MOUNT_ID;
-        (document.querySelector('.ps-latest, main, body') || document.body).appendChild(root);
+        // Mount element doesn't exist - this script shouldn't run on this page
+        return;
     }
 
     // If no endpoint info at all, bail loudly
