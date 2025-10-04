@@ -7,7 +7,7 @@ if (!defined('ABSPATH')) exit;
 final class Prompt
 {
     // bump when TEXT changes
-    public const VERSION = '5.0.0';
+    public const VERSION = '5.0.1';
 
     /**
      * Get the prompt text, with support for custom prompts from settings.
@@ -134,26 +134,44 @@ Place these keys in the OUTPUT SCHEMA where facets belong (respect global key or
 
 ## Moderation (global)
 
-Decision order:
+Use one `labels` array for both **policy-routing** and **reader-facing warnings**. Include labels only when explicit or unmistakable. Do **not** invent new labels at runtime.
 
-1. **`reject_candidate`** — only if clearly present; add labels:
+### Decision order
+
+1. **`reject_candidate`** — only if clearly present. Add applicable labels:
 
    * `sexual_content` + `minors_context` (sexual content involving minors)
-   * `sexual_content` (graphic adult sex/how-to)
-   * `ncii` (+ `pii_present_strong` if PII)
-   * `threat` (credible, imminent: target + intent + means/time/place)
-   * `illicit_instructions`
-   * `extremism_promotion`
    * `self_harm_instructions`
+   * `threat` (credible/imminent: target + intent + means/time/place)
+   * `illicit_instructions`, `extremism_promotion`, `fraud_malware`
+   * `ncii` (add `pii_present_strong` if PII present)
+   * `hate_violence`, `sexual_violence`
    * Severe doxxing enabling harm → `pii_present_strong`, `targeted_harassment`
-   * `hate_violence` (violence/dehumanization)
-   * `sexual_violence`
-   * `fraud_malware`
-   * If uncertain → do **not** reject; use `needs_review`. Use only the documented moderation labels; do not create new labels at runtime.
-2. **`needs_review`** — any serious label or `nsfwScore ≥ 0.70` (e.g., `self_harm_mention`, non-imminent `threat`, `slur_present`, non-graphic adult `sexual_content`, `minors_context`, `pii_present_strong`).
+   * If uncertain → do **not** reject; use `needs_review`.
+2. **`needs_review`** — any serious label or `nsfwScore ≥ 0.70` (e.g., `self_harm_mention`, non-imminent `threat`, `slur_present`, non-graphic adult `sexual_content`, `minors_context`, `pii_present_strong`, or strong reader-warning labels like `sexual_violence`, `blood_gore`, `weapons`).
 3. **`auto_vetted`** — none of the above and `nsfwScore < 0.70`.
 
-**PII**: `containsPII=true` only for clear **name**, **email**, **phone**, or **postal address**; set `piiTypes` from `[name,email,phone,address,other]`. Initials or generic roles do **not** count.
+### Allowed `labels` (union set)
+
+* **Policy-routing:**
+  `self_harm_mention, self_harm_instructions, threat, extremism_promotion, hate_violence, sexual_violence, sexual_content, minors_context, ncii, fraud_malware, illicit_instructions, targeted_harassment, pii_present_strong, slur_present`
+* **Reader-facing warnings:**
+  `suicide_mention, violence, abuse, child_abuse, death_grief, eating_disorder, substance_use, pregnancy_loss, abortion, crime_illegal_activity, stalking_harassment, weapons, blood_gore`
+
+### Extraction rules
+
+* **Scope:** Use both image and text; base labels on concrete signals, not vibe.
+* **Cardinality:** 0–6 labels; omit if ambiguous.
+* **PII:**
+
+  * `containsPII=true` only for clear **name**, **email**, **phone**, or **postal address**; set `piiTypes` from `[name,email,phone,address,other]`.
+  * Initials, usernames without real names, or generic roles do **not** count.
+  * Use `pii_present_strong` in `labels` when PII is present at a level that meaningfully increases risk (e.g., full name + address).
+
+### Notes
+
+* `nsfwScore` is a continuous confidence score (0.00–1.00) for adult/unsafe content risk; clamp per Determinism.
+* Arrays must be de-duplicated and lexicographically sorted (`moderation.labels`).
 
 ---
 
@@ -207,7 +225,7 @@ Scores for artDescription/fontDescription reflect overall confidence across both
 },
 "moderation": {
 "reviewStatus": "<auto_vetted|needs_review|reject_candidate>",
-"labels": ["<short label>", "..."],
+"labels": ["<label>", "..."],
 "nsfwScore": 0.00,
 "containsPII": false,
 "piiTypes": []

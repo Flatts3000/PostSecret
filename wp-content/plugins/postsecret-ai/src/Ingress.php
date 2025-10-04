@@ -255,15 +255,22 @@ function psai_store_result(int $att_id, array $payload, string $model): void
     $topics = array_values(array_filter(array_map('strval', $payload['topics'] ?? [])));
     $feelings = array_values(array_filter(array_map('strval', $payload['feelings'] ?? [])));
     $meanings = array_values(array_filter(array_map('strval', $payload['meanings'] ?? [])));
+    $vibe = array_values(array_filter(array_map('strval', $payload['vibe'] ?? [])));
+    $locations = array_values(array_filter(array_map('strval', $payload['locations'] ?? [])));
     sort($topics);
     sort($feelings);
     sort($meanings);
+    sort($vibe);
+    sort($locations);
 
     update_post_meta($att_id, '_ps_payload', $payload);
     update_post_meta($att_id, '_ps_topics', $topics);
     update_post_meta($att_id, '_ps_feelings', $feelings);
     update_post_meta($att_id, '_ps_meanings', $meanings);
-    update_post_meta($att_id, '_ps_teaches_wisdom', (bool)($payload['teachesWisdom'] ?? false) ? '1' : '0');
+    update_post_meta($att_id, '_ps_vibe', $vibe);
+    update_post_meta($att_id, '_ps_style', (string)($payload['style'] ?? 'unknown'));
+    update_post_meta($att_id, '_ps_locations', $locations);
+    update_post_meta($att_id, '_ps_wisdom', (string)($payload['wisdom'] ?? ''));
     update_post_meta($att_id, '_ps_model', $model);
     update_post_meta($att_id, '_ps_prompt_version', $promptVer);
     update_post_meta($att_id, '_ps_updated_at', wp_date('c'));
@@ -297,6 +304,10 @@ function psai_update_manifest(int $att_id, array $payload): void
     if (!empty($payload['topics'])) $entry['topics'] = array_values((array)$payload['topics']);
     if (!empty($payload['feelings'])) $entry['feelings'] = array_values((array)$payload['feelings']);
     if (!empty($payload['meanings'])) $entry['meanings'] = array_values((array)$payload['meanings']);
+    if (!empty($payload['vibe'])) $entry['vibe'] = array_values((array)$payload['vibe']);
+    if (!empty($payload['style'])) $entry['style'] = (string)$payload['style'];
+    if (!empty($payload['locations'])) $entry['locations'] = array_values((array)$payload['locations']);
+    if (!empty($payload['wisdom'])) $entry['wisdom'] = (string)$payload['wisdom'];
 
     // upsert by sourceImage
     $by = [];
