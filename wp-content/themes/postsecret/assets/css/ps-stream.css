@@ -93,9 +93,7 @@
 ------------------------------ */
 .ps-latest .ps-card__media {
     position: relative;
-    max-height: 600px;
-    min-height: 300px;
-    overflow: hidden;
+    overflow: visible;
     background: transparent;
     display: flex;
     align-items: center;
@@ -106,7 +104,6 @@
 /* Portrait: small top/bottom padding, more left/right */
 .ps-latest .ps-card[data-orientation="portrait"] .ps-card__media {
     padding: 8px 24px;
-    max-height: 600px;
 }
 
 /* Landscape: small left/right padding, let height adjust naturally */
@@ -130,7 +127,6 @@
     display: block;
     max-width: 100%;
     height: auto;
-    max-height: 600px;
     object-fit: contain;
     transition: transform .35s ease, opacity .35s ease;
     margin: 0 auto;
@@ -138,7 +134,6 @@
 
 /* Portrait: maximize vertical space */
 .ps-latest .ps-card[data-orientation="portrait"] .ps-card__img {
-    max-height: 584px; /* 600px - 16px padding */
     width: auto;
     margin: 0 auto;
 }

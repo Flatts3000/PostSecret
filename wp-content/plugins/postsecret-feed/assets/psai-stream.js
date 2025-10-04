@@ -178,6 +178,7 @@
     let minLongSide = Infinity;
 
     // Calculate size styles based on API dimensions
+    // Only constrain the long side, let the short side scale naturally
     const calculateCardStyles = (item) => {
         const width = item.width || 0;
         const height = item.height || 0;
@@ -194,14 +195,10 @@
 
         let styles = {};
         if (orientation === 'landscape' && width && height) {
-            // For landscape: constrain width, calculate height from aspect ratio
-            const scaledHeight = (targetLongSide / width) * height;
-            styles.maxHeight = `${scaledHeight + 32}px`; // +32 for padding
+            // For landscape: width is the long side, only constrain width
             styles.maxWidth = `${targetLongSide}px`;
         } else if (orientation === 'portrait' && width && height) {
-            // For portrait: constrain height, calculate width from aspect ratio
-            const scaledWidth = (targetLongSide / height) * width;
-            styles.maxWidth = `${scaledWidth + 48}px`; // +48 for padding
+            // For portrait: height is the long side, only constrain height
             styles.maxHeight = `${targetLongSide}px`;
         }
 
