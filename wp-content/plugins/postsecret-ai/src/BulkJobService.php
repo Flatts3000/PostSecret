@@ -464,16 +464,64 @@ final class BulkJobService
                 ], ['id' => $item['id']]);
                 $success_count++;
             } else {
-                $attempts = (int)$item['attempts'] + 1;
-                $status = $attempts >= 3 ? self::ITEM_QUARANTINED : self::ITEM_ERROR;
+                $error_msg = $result['error'] ?? 'Unknown error';
 
-                $wpdb->update($table_items, [
-                    'status' => $status,
-                    'attempts' => $attempts,
-                    'last_error' => substr($result['error'], 0, 500),
-                    'updated_at' => current_time('mysql'),
-                ], ['id' => $item['id']]);
-                $fail_count++;
+                // Check if this is a rate limit error (HTTP 429)
+                $is_rate_limit = strpos($error_msg, 'HTTP 429') !== false ||
+                                strpos($error_msg, 'rate_limit_exceeded') !== false ||
+                                strpos($error_msg, 'Rate limit') !== false;
+
+                if ($is_rate_limit) {
+                    // For rate limits, reset item to pending so it can be retried
+                    $wpdb->update($table_items, [
+                        'status' => self::ITEM_PENDING,
+                        'last_error' => 'Rate limit - will retry',
+                        'updated_at' => current_time('mysql'),
+                    ], ['id' => $item['id']]);
+
+                    // Store rate limit warning on job
+                    $wpdb->update($table_jobs, [
+                        'last_error' => 'Rate limit reached - pausing briefly',
+                        'updated_at' => current_time('mysql'),
+                    ], ['id' => $job_id]);
+
+                    // Update what we've processed so far
+                    $wpdb->query($wpdb->prepare(
+                        "UPDATE {$table_jobs} SET
+                            processed_items = processed_items + %d,
+                            success_count = success_count + %d,
+                            fail_count = fail_count + %d,
+                            updated_at = %s
+                        WHERE id = %d",
+                        $processed,
+                        $success_count,
+                        $fail_count,
+                        current_time('mysql'),
+                        $job_id
+                    ));
+
+                    // Return immediately with retry signal
+                    return [
+                        'success' => true,
+                        'processed' => $processed,
+                        'status' => self::STATUS_RUNNING,
+                        'has_more' => true,
+                        'rate_limited' => true,
+                        'retry_after' => 2000, // 2 second delay before next batch
+                    ];
+                } else {
+                    // Regular error - mark as failed
+                    $attempts = (int)$item['attempts'] + 1;
+                    $status = $attempts >= 3 ? self::ITEM_QUARANTINED : self::ITEM_ERROR;
+
+                    $wpdb->update($table_items, [
+                        'status' => $status,
+                        'attempts' => $attempts,
+                        'last_error' => substr($error_msg, 0, 500),
+                        'updated_at' => current_time('mysql'),
+                    ], ['id' => $item['id']]);
+                    $fail_count++;
+                }
             }
 
             $processed++;

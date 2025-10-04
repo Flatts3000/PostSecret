@@ -668,7 +668,16 @@ final class AdminBulkUpload
 
                         // Continue if still running
                         if (response.data.status === 'running' && response.data.has_more) {
-                            setTimeout(() => processStep(jobId), 500);
+                            // Use longer delay if rate limited
+                            const delay = response.data.rate_limited ?
+                                (response.data.retry_after || 2000) :
+                                500;
+
+                            if (response.data.rate_limited) {
+                                updateLiveStatus('Rate limit reached - pausing briefly...');
+                            }
+
+                            setTimeout(() => processStep(jobId), delay);
                         } else if (response.data.status === 'completed') {
                             updateLiveStatus('Job completed');
                         }

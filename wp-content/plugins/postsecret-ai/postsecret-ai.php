@@ -981,18 +981,48 @@ add_action('wp_ajax_psai_reclassify_step', function() {
             } catch (\Exception $e) {
                 $error_msg = $e->getMessage();
 
-                $wpdb->update($table_items, [
-                    'status' => \PSAI\BulkJobService::ITEM_ERROR,
-                    'last_error' => substr($error_msg, 0, 500),
-                    'updated_at' => current_time('mysql'),
-                ], ['id' => $item_id]);
+                // Check if this is a rate limit error (HTTP 429)
+                $is_rate_limit = strpos($error_msg, 'HTTP 429') !== false ||
+                                strpos($error_msg, 'rate_limit_exceeded') !== false ||
+                                strpos($error_msg, 'Rate limit') !== false;
 
-                $wpdb->update($table_jobs, [
-                    'last_error' => substr($error_msg, 0, 500),
-                    'updated_at' => current_time('mysql'),
-                ], ['id' => $job_id]);
+                if ($is_rate_limit) {
+                    // For rate limits, reset item to pending so it can be retried
+                    $wpdb->update($table_items, [
+                        'status' => \PSAI\BulkJobService::ITEM_PENDING,
+                        'last_error' => 'Rate limit - will retry',
+                        'updated_at' => current_time('mysql'),
+                    ], ['id' => $item_id]);
 
-                $failed++;
+                    // Store rate limit warning on job
+                    $wpdb->update($table_jobs, [
+                        'last_error' => 'Rate limit reached - pausing briefly',
+                        'updated_at' => current_time('mysql'),
+                    ], ['id' => $job_id]);
+
+                    // Return immediately with retry signal and delay
+                    wp_send_json_success([
+                        'status' => \PSAI\BulkJobService::STATUS_RUNNING,
+                        'has_more' => true,
+                        'rate_limited' => true,
+                        'retry_after' => 2000, // 2 second delay before next batch
+                        'processed' => $success + $failed,
+                    ]);
+                } else {
+                    // Regular error - mark as failed
+                    $wpdb->update($table_items, [
+                        'status' => \PSAI\BulkJobService::ITEM_ERROR,
+                        'last_error' => substr($error_msg, 0, 500),
+                        'updated_at' => current_time('mysql'),
+                    ], ['id' => $item_id]);
+
+                    $wpdb->update($table_jobs, [
+                        'last_error' => substr($error_msg, 0, 500),
+                        'updated_at' => current_time('mysql'),
+                    ], ['id' => $job_id]);
+
+                    $failed++;
+                }
             }
         }
     }
