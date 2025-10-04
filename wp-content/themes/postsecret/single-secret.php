@@ -81,7 +81,10 @@ while (have_posts()) :
     $topics = (array) get_post_meta($front_id, '_ps_topics', true);
     $feelings = (array) get_post_meta($front_id, '_ps_feelings', true);
     $meanings = (array) get_post_meta($front_id, '_ps_meanings', true);
-    $teaches_wisdom = get_post_meta($front_id, '_ps_teaches_wisdom', true) === '1';
+    $vibe = (array) get_post_meta($front_id, '_ps_vibe', true);
+    $locations = (array) get_post_meta($front_id, '_ps_locations', true);
+    $style = get_post_meta($front_id, '_ps_style', true);
+    $wisdom = get_post_meta($front_id, '_ps_wisdom', true);
 
     // Descriptors
     $orientation = get_post_meta($front_id, '_ps_orientation', true) ?: 'unknown';
@@ -206,58 +209,68 @@ while (have_posts()) :
                     </section>
                 <?php endif; ?>
 
-                <!-- Facets -->
-                <?php if (!empty($topics) || !empty($feelings) || !empty($meanings) || $teaches_wisdom) : ?>
+                <!-- Facets (combined) -->
+                <?php
+                $all_facets = array_merge($vibe, $locations, $topics, $feelings, $meanings);
+                if (!empty($all_facets) || !empty($wisdom)) :
+                ?>
                     <section class="ps-secret__facets">
                         <h2 class="ps-secret__section-title"><?php esc_html_e('Themes', 'postsecret'); ?></h2>
 
-                        <?php if (!empty($topics)) : ?>
-                            <div class="ps-facet-group ps-facet-group--topics">
-                                <h3 class="ps-facet-group__title"><?php esc_html_e('Topics', 'postsecret'); ?></h3>
-                                <ul class="ps-facet-list" role="list">
-                                    <?php foreach ($topics as $topic) : ?>
-                                        <li class="ps-facet ps-facet--topic"><?php echo esc_html($topic); ?></li>
-                                    <?php endforeach; ?>
-                                </ul>
-                            </div>
+                        <?php if (!empty($all_facets)) : ?>
+                            <ul class="ps-facet-list ps-facet-list--combined" role="list">
+                                <?php // Alphabetical order: Feelings, Locations, Meanings, Topics, Vibe ?>
+                                <?php foreach ($feelings as $feeling) : ?>
+                                    <?php if (!empty($feeling)) : ?>
+                                        <li class="ps-facet ps-facet--feeling"><?php echo esc_html(ucwords(str_replace('_', ' ', $feeling))); ?></li>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                                <?php foreach ($locations as $loc) : ?>
+                                    <?php if (!empty($loc)) : ?>
+                                        <li class="ps-facet ps-facet--location"><?php echo esc_html(ucwords(str_replace('_', ' ', $loc))); ?></li>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                                <?php foreach ($meanings as $meaning) : ?>
+                                    <?php if (!empty($meaning)) : ?>
+                                        <li class="ps-facet ps-facet--meaning"><?php echo esc_html(ucwords(str_replace('_', ' ', $meaning))); ?></li>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                                <?php foreach ($topics as $topic) : ?>
+                                    <?php if (!empty($topic)) : ?>
+                                        <li class="ps-facet ps-facet--topic"><?php echo esc_html(ucwords(str_replace('_', ' ', $topic))); ?></li>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                                <?php foreach ($vibe as $v) : ?>
+                                    <?php if (!empty($v)) : ?>
+                                        <li class="ps-facet ps-facet--vibe"><?php echo esc_html(ucwords(str_replace('_', ' ', $v))); ?></li>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </ul>
                         <?php endif; ?>
 
-                        <?php if (!empty($feelings)) : ?>
-                            <div class="ps-facet-group ps-facet-group--feelings">
-                                <h3 class="ps-facet-group__title"><?php esc_html_e('Feelings', 'postsecret'); ?></h3>
-                                <ul class="ps-facet-list" role="list">
-                                    <?php foreach ($feelings as $feeling) : ?>
-                                        <li class="ps-facet ps-facet--feeling"><?php echo esc_html($feeling); ?></li>
-                                    <?php endforeach; ?>
-                                </ul>
-                            </div>
-                        <?php endif; ?>
-
-                        <?php if (!empty($meanings)) : ?>
-                            <div class="ps-facet-group ps-facet-group--meanings">
-                                <h3 class="ps-facet-group__title"><?php esc_html_e('Meanings', 'postsecret'); ?></h3>
-                                <ul class="ps-facet-list" role="list">
-                                    <?php foreach ($meanings as $meaning) : ?>
-                                        <li class="ps-facet ps-facet--meaning"><?php echo esc_html($meaning); ?></li>
-                                    <?php endforeach; ?>
-                                </ul>
-                            </div>
-                        <?php endif; ?>
-
-                        <?php if ($teaches_wisdom) : ?>
-                            <div class="ps-wisdom-badge">
+                        <?php if (!empty($wisdom)) : ?>
+                            <div class="ps-wisdom-quote">
                                 <i class="fa-solid fa-lightbulb" aria-hidden="true"></i>
-                                <?php esc_html_e('Teaches Wisdom', 'postsecret'); ?>
+                                <blockquote class="ps-wisdom-text">
+                                    <?php echo esc_html($wisdom); ?>
+                                </blockquote>
                             </div>
                         <?php endif; ?>
                     </section>
                 <?php endif; ?>
 
                 <!-- Descriptors (art/font/media/orientation) -->
-                <?php if ($art_style || $font_style || $media_type || $orientation) : ?>
+                <?php if ($style || $art_style || $font_style || $media_type || $orientation) : ?>
                     <section class="ps-secret__descriptors">
                         <h2 class="ps-secret__section-title"><?php esc_html_e('Style', 'postsecret'); ?></h2>
                         <dl class="ps-descriptor-list">
+                            <?php if (!empty($style) && $style !== 'unknown') : ?>
+                                <div class="ps-descriptor">
+                                    <dt><?php esc_html_e('Visual Style', 'postsecret'); ?></dt>
+                                    <dd><?php echo esc_html(ucwords(str_replace('_', ' ', $style))); ?></dd>
+                                </div>
+                            <?php endif; ?>
+
                             <?php if ($orientation && $orientation !== 'unknown') : ?>
                                 <div class="ps-descriptor">
                                     <dt><?php esc_html_e('Orientation', 'postsecret'); ?></dt>
